@@ -1,7 +1,10 @@
-// Voxis IPC 命令（todo1 基础命令集）
+// Voxis IPC 命令（todo1 基础命令 + todo2 录音命令）
+use crate::audio::capture::CaptureCallbacks;
+use crate::audio::devices;
 use crate::config::{self, Config};
 use crate::state::AppState;
-use tauri::{AppHandle, Manager, State};
+use std::time::Duration;
+use tauri::{AppHandle, Emitter, Manager, State};
 
 #[tauri::command]
 pub fn ping() -> String {
@@ -36,4 +39,62 @@ pub fn show_main_window(app: AppHandle) {
         let _ = win.show();
         let _ = win.set_focus();
     }
+}
+
+// ---------- todo2：录音 ----------
+
+#[tauri::command]
+pub fn list_input_devices() -> Result<Vec<devices::InputDevice>, String> {
+    devices::list_input_devices()
+}
+
+/// dev 临时命令：开始采集（todo4 由 start_session 替代）
+#[tauri::command]
+pub fn dev_capture_start(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    device: Option<String>,
+) -> Result<(), String> {
+    let max_duration = {
+        let cfg = state.config.read().map_err(|e| format!("配置锁中毒: {e}"))?;
+        Duration::from_secs(cfg.asr.max_duration as u64)
+    };
+
+    let emitter = app.clone();
+    state.capture.start(
+        device.clone(),
+        Some(max_duration),
+        CaptureCallbacks {
+            on_volume: Box::new(move |level| {
+                let _ = emitter.emit("session://volume", level);
+            }),
+            on_pcm: Box::new(|chunk| {
+                // todo3/todo4 接 ASR；当前仅统计
+                tracing::trace!("PCM 块 {} 帧", chunk.len());
+            }),
+            on_max_duration: {
+                let em = app.clone();
+                Box::new(move || {
+                    let _ = em.emit("session://max_duration_reached", ());
+                })
+            },
+            on_error: {
+                let em = app.clone();
+                Box::new(move |msg| {
+                    let _ = em.emit(
+                        "session://error",
+                        serde_json::json!({ "source": "audio", "message": msg }),
+                    );
+                })
+            },
+        },
+    )?;
+    tracing::info!("dev 采集已开始 device={device:?} max={max_duration:?}");
+    Ok(())
+}
+
+/// dev 临时命令：停止采集
+#[tauri::command]
+pub fn dev_capture_stop(state: State<'_, AppState>) -> Result<(), String> {
+    state.capture.stop()
 }

@@ -28,3 +28,24 @@ export const ping = () => invoke<string>("ping");
 export const getConfig = () => invoke<VoxisConfig>("get_config");
 export const setConfig = (config: VoxisConfig) => invoke<void>("set_config", { config });
 export const showMainWindow = () => invoke<void>("show_main_window");
+
+// ---- todo2：录音 ----
+export interface InputDevice {
+  id: string;
+  name: string;
+  is_default: boolean;
+}
+export const listInputDevices = () => invoke<InputDevice[]>("list_input_devices");
+export const devCaptureStart = (device?: string) =>
+  invoke<void>("dev_capture_start", { device: device ?? null });
+export const devCaptureStop = () => invoke<void>("dev_capture_stop");
+
+// ---- 事件名常量 ----
+export const EV = {
+  volume: "session://volume",
+  error: "session://error",
+  maxDuration: "session://max_duration_reached",
+  partial: "session://partial",
+  state: "session://state",
+  committed: "session://committed",
+} as const;

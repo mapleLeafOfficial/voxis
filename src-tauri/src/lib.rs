@@ -1,4 +1,5 @@
 // Voxis — Linux 全局语音输入（复刻微信 PC 端体验）
+pub mod audio;
 mod commands;
 mod config;
 mod logging;
@@ -36,6 +37,9 @@ pub fn run() {
             commands::get_config,
             commands::set_config,
             commands::show_main_window,
+            commands::list_input_devices,
+            commands::dev_capture_start,
+            commands::dev_capture_stop,
         ])
         .setup(|_app| {
             // dev 构建直接显示主窗口，方便调试；release 由托盘/命令唤起
