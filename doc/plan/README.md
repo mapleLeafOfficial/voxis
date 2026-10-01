@@ -1,7 +1,7 @@
 # Voxis 开发计划总览
 
 > PRD：[../PRD.md](../PRD.md) · 流程：模块化开发，每个 todo 完成后需用户确认再继续
-> 当前状态：**todo2 已完成，待确认后开始 todo3**
+> 当前状态：**todo3 已完成，待确认后开始 todo4**
 
 ## Todo 列表与进度
 
@@ -9,7 +9,7 @@
 |---|------|----------|--------|------|------|
 | 1 | 项目骨架（Tauri2+Vue3+配置+单实例+日志） | 开发约束 / M6部分 / M8部分 | P0 | — | ✅ |
 | 2 | 录音引擎（cpal/PipeWire） | M2 | P0 | todo1 | ✅ |
-| 3 | 流式 ASR 客户端（DashScope WS） | M3 | P0 | todo1 | ⬜ |
+| 3 | 流式 ASR 客户端（DashScope WS） | M3 | P0 | todo1 | ✅ |
 | 4 | 会话状态机 + IPC 整合 | M2+M3 串联 | P0 | todo2, todo3 | ⬜ |
 | 5 | 气泡浮窗（实时预览 UI） | M4 | P0 | todo4 | ⬜ |
 | 6 | 全局热键引擎（evdev hold/lock） | M1 | P0 | todo4 | ⬜ |

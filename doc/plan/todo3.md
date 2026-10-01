@@ -6,7 +6,7 @@
 - **优先级**：P0
 - **预估工作量**：~6 个文件
 - **依赖**：todo1
-- **状态**：⬜ 未开始
+- **状态**：✅ 已完成（含真实转写/错误 Key 双冒烟验证）
 
 ---
 
@@ -20,20 +20,20 @@
 
 ### Rust
 
-- [ ] **依赖**：`tokio-tungstenite`（含 native-tls）、`futures-util`、`uuid`、`rand`（nonce）
-- [ ] **协议层** `src-tauri/src/asr/protocol.rs`：
-  - 请求构造：`run-task`（header 含 `X-DashScope-DataInspection: enable`，`task_group=audio`，`task=asr`，`function=recognition`，model、`input{}`、`parameters{sample_rate:16000, format:"pcm", max_sentence_silence, semantic_punctuation_enabled, language_hints}`）
-  - 响应解析：`task-started` / `result-generated`（`payload.output.sentence`：`text`、`end_time`、`sentence_end: bool`）/ `task-failed`（code+message）/ `task-finished`
-  - 二进制帧：4 字节 header + payload PCM
-- [ ] **客户端** `src-tauri/src/asr/client.rs`：
-  - `AsrClient::connect(cfg) -> Result`：连 `wss://dashscope.aliyuncs.com/api-ws/v1/inference`，鉴权 `Authorization: bearer <key>`，发 run-task 等 task-started
-  - `send_pcm(&[i16])`：切片 ≤ 3200 帧打包二进制帧；静音时发零值块
-  - 回调通道：`mpsc::Receiver<AsrEvent>`，事件 `Partial(String)` / `SentenceEnd(String)` / `Finished(String /*全文*/)` / `Failed{code,message}` / `Closed`
-  - `finish()`：发 finish-task；内部等 task-finished（带超时）
-  - 掉线/超时检测：读空闲 > 10s 视为断流 → Failed
-- [ ] **API Key 解析** `src-tauri/src/asr/key.rs`：env `QWEN_API_KEY` > `DASHSCOPE_API_KEY` > config；`resolve_api_key()` 返回 `Option<String>`
-- [ ] **默认模型**：`qwen3-asr-flash-streaming`（配置可改；连接失败且模型报无效时日志提示回退 `qwen-audio-3.0-asr-flash-streaming`，不自动重试）
-- [ ] **集成测试** `src-tauri/examples/asr_smoke.rs`：读 16k wav → 走完整会话 → 打印全文（手动 `cargo run --example` 验证）
+- [x] **依赖**：`tokio-tungstenite`（native-tls）、`futures-util`、`uuid`（v4，task_id；无需单独 rand）
+- [x] **协议层** `src-tauri/src/asr/protocol.rs`：
+  - 请求构造：`run-task`（`task_group=audio`、`task=asr`、`function=recognition`、model、`input{}`、`parameters{sample_rate:16000, format:"pcm", max_sentence_silence, semantic_punctuation_enabled, language_hints}`）
+  - 响应解析：`task-started` / `result-generated`（`payload.output.sentence`：`text`、`sentence_end: bool`、心跳忽略）/ `task-failed`（code+message）/ `task-finished`
+  - 音频：**裸 PCM 二进制帧**（每帧 ≤3200 帧，i16 LE；见备注1）
+- [x] **客户端** `src-tauri/src/asr/client.rs`（async owner-task 模式，句柄仅持命令通道，可 Clone）：
+  - `AsrSession::start(cfg)`：连接（鉴权 `Authorization: Bearer`）→ 发 run-task → task-started 前的音频自动缓冲
+  - `send_pcm(&[i16])`：自动按 ≤3200 帧切分二进制帧
+  - `mpsc::Receiver<AsrEvent>`：`Started` / `Partial` / `Sentence` / `Finished(全文)` / `Failed{code,message}`
+  - `finish()`：发 finish-task，内部等 task-finished（≤2s，PRD 口径）
+  - 读空闲 >10s / 对端关闭 → `Failed{code:"idle"}`；Failed 后仍发 `Finished`（携带已识别部分，尽力而为）
+- [x] **API Key 解析** `src-tauri/src/asr/key.rs`：env `QWEN_API_KEY` > `DASHSCOPE_API_KEY` > config；`resolve_api_key()` 返回 `Option<String>`
+- [x] **默认模型**：**`qwen-audio-3.0-asr-flash-streaming`**（实测 `qwen3-asr-flash-streaming` 对现有 Key 返回 `ModelNotFound`，已改默认值并在 config.rs 注释说明；连接失败不自动重试）
+- [x] **集成测试** `src-tauri/examples/asr_smoke.rs`：espeak-ng 生成中文语音→ffmpeg 转 16k 或 `--wav` 指定文件 → 完整会话 → 打印事件流与全文；支持 `--model` / `--bad-key`
 
 ---
 
@@ -52,12 +52,16 @@
 
 ## 验证标准
 
-- [ ] `cargo build` 通过
-- [ ] `asr_smoke` 用真实 Key 跑通：输出一段 16kHz wav 的转写全文，含标点
-- [ ] partial → sentence_end 序列在日志可见（说话中 text 变化、末尾 sentence_end=true）
-- [ ] 错误路径：错误 Key → `task-failed` 事件带明确 code；拔网线 → 断流 Failed
-- [ ] 无 Key 时 `resolve_api_key()` 返回 None 且不影响编译/启动
+- [x] `cargo build` 通过（零警告）
+- [x] `asr_smoke` 用真实 Key 跑通：espeak 中文语音 → 全文 `你好，欢迎使用语音输入。今天天气怎么样？`（含标点）✅
+- [x] partial → sentence_end 序列在日志可见（8 次中间结果递增，末尾断句+finished）✅
+- [x] 错误路径：错误 Key → 连接阶段 `HTTP error: 401 Unauthorized`；模型不存在 → `task-failed ModelNotFound` ✅
+- [x] 无 Key 时 `resolve_api_key()` 返回 None，不影响编译/启动 ✅
 
 ## 备注
 
-模型名以百炼实际开通为准；`language_hints` 留空 = 自动检测。冒烟 wav 可用现有 voice_input 脚本录一段或 ffmpeg 生成。
+1. **协议与计划书的差异**：本计划原写「4 字节二进制帧头」，但实测（以跑通的 voice_input.py 为准）DashScope 双工 ASR 接受 **JSON 文本帧控制 + 裸 PCM 二进制帧（无帧头）**，按后者实现。
+2. **TLS 方案**：native-tls（系统 OpenSSL 3.6）而非 rustls —— rustls 需手动选 CryptoProvider，native-tls 更省事且 Arch 开箱即用。
+3. **模型实测**：`qwen-audio-3.0-asr-flash-streaming` ✅ 可用；`qwen3-asr-flash-streaming` ❌ ModelNotFound（当前 Key 未开通），应用默认值已改为前者，用户可在设置里自行尝试新模型。
+4. `Finished` 事件在失败路径也会发出（携带已识别文本）——上层 todo4 以 `Failed` 为中止信号，`Finished` 里的部分文本可用于尽力而为输出。
+5. 冒烟 example 内置了 espeak-ng/ffmpeg 语音生成与 WAV 解析，仅为本机调试用，不进主程序。

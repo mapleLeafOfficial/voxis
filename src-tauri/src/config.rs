@@ -81,7 +81,8 @@ impl Config {
         Config {
             api_key: String::new(),
             asr: AsrConfig {
-                model: "qwen3-asr-flash-streaming".into(),
+                // 实测 qwen3-asr-flash-streaming 对现有 Key 返回 ModelNotFound，默认用已验证可用的模型
+                model: "qwen-audio-3.0-asr-flash-streaming".into(),
                 ws_url: "wss://dashscope.aliyuncs.com/api-ws/v1/inference".into(),
                 silence_ms: 1300,
                 semantic_punct: true,
