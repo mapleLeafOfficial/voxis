@@ -1,13 +1,24 @@
 // 键盘注入：模拟 Ctrl+V 粘贴到当前焦点/光标。
-// Wayland 主路径 ydotool（uinput 内核注入，合成器路由到焦点应用）；X11 回退 xdotool。
+// Linux：Wayland 主路径 ydotool（uinput 内核注入，合成器路由到焦点应用）；X11 回退 xdotool。
+// Windows：SendInput（todo3 实现，当前桩）。
+#[cfg(target_os = "linux")]
 use std::path::PathBuf;
+#[cfg(target_os = "linux")]
 use std::process::Command;
 use std::time::Duration;
 
 /// 注入前静默等待：给合成器/应用同步剪贴板的窗口
 const PASTE_QUIET: Duration = Duration::from_millis(150);
 
-/// 尝试注入粘贴。Ok(()) = 已注入；Err(原因) = 不可用/失败（调用方回退 copied）。
+/// Windows：SendInput Ctrl+V（todo3 实现真身，当前桩）
+#[cfg(target_os = "windows")]
+pub fn inject_paste() -> Result<(), String> {
+    std::thread::sleep(PASTE_QUIET);
+    Err("windows 注入通道未实现（todo3 SendInput）".into())
+}
+
+/// 尝试注入粘贴（Linux）。Ok(()) = 已注入；Err(原因) = 不可用/失败（调用方回退 copied）。
+#[cfg(target_os = "linux")]
 pub fn inject_paste() -> Result<(), String> {
     // 注入前静默（剪贴板同步窗口）
     std::thread::sleep(PASTE_QUIET);
@@ -47,6 +58,7 @@ pub fn inject_paste() -> Result<(), String> {
 }
 
 /// 探测 ydotoold socket：YDOTOOL_SOCKET env → /run/user/<uid>/.ydotool_socket → /run/ydotoold/socket
+#[cfg(target_os = "linux")]
 fn ydotoold_socket() -> Option<PathBuf> {
     if let Some(p) = std::env::var_os("YDOTOOL_SOCKET") {
         let path = PathBuf::from(p);
@@ -69,6 +81,7 @@ fn ydotoold_socket() -> Option<PathBuf> {
     candidates.into_iter().find(|p| p.exists())
 }
 
+#[cfg(target_os = "linux")]
 fn which_exists(prog: &str) -> bool {
     Command::new("which")
         .arg(prog)

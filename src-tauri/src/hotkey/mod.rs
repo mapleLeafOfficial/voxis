@@ -1,9 +1,15 @@
 // 全局热键引擎：evdev 直读实现系统级组合键（hold 按住说话 / lock toggle）。
 // 本模块启动入口 `start()`：权限自检 → 枚举键盘 → 读线程汇聚 → 状态机消费 → 驱动会话。
+#[cfg(target_os = "linux")]
 pub mod evdev;
+#[cfg(target_os = "windows")]
+pub mod win;
 pub mod keys;
+pub mod monitor;
 pub mod permission;
 pub mod state;
+
+pub use monitor::{MonitorHandle, RawKeyEvent};
 
 use std::sync::mpsc;
 
@@ -56,8 +62,8 @@ fn spawn_engine(app: &AppHandle) -> Result<(), String> {
         .try_state::<AppState>()
         .and_then(|s| s.config.read().ok().map(|c| c.hotkey.clone()))
         .ok_or_else(|| "无法读取配置，热键引擎未启动".to_string())?;
-    let hold: Vec<String> = cfg.hold.iter().filter_map(|n| keys::key_from_name(n).map(|_| n.clone())).collect();
-    let lock: Vec<String> = cfg.lock.iter().filter_map(|n| keys::key_from_name(n).map(|_| n.clone())).collect();
+    let hold: Vec<String> = cfg.hold.iter().filter(|n| keys::valid_name(n)).cloned().collect();
+    let lock: Vec<String> = cfg.lock.iter().filter(|n| keys::valid_name(n)).cloned().collect();
     // polish.hotkey = "Ctrl+Super+O"（manual 整理组合；mode=off 时也解析，配置切回 manual 无需重启）
     let polish_combo: Vec<String> = app
         .try_state::<AppState>()
@@ -65,18 +71,30 @@ fn spawn_engine(app: &AppHandle) -> Result<(), String> {
         .unwrap_or_default()
         .split('+')
         .map(str::trim)
-        .filter(|n| keys::key_from_name(n).is_some())
+        .filter(|n| keys::valid_name(n))
         .map(str::to_string)
         .collect();
     if hold.is_empty() && lock.is_empty() {
         return Err("hold/lock 均未配置有效键名，热键引擎未启动".into());
     }
 
-    // 3) 枚举键盘设备并启动读线程
-    let (tx, rx) = mpsc::channel::<evdev::RawKeyEvent>();
-    let (monitor, n_devs) = evdev::spawn_monitors(tx);
+    // 3) 键盘事件源（Linux: evdev / Windows: 钩子），统一 RawKeyEvent 流
+    #[cfg(target_os = "linux")]
+    let (tx, rx) = mpsc::channel::<RawKeyEvent>();
+    #[cfg(target_os = "windows")]
+    let (tx, rx) = mpsc::channel::<RawKeyEvent>();
+    let (monitor, n_devs) = {
+        #[cfg(target_os = "linux")]
+        {
+            evdev::spawn_monitors(tx)
+        }
+        #[cfg(target_os = "windows")]
+        {
+            win::spawn_monitors(tx)
+        }
+    };
     if n_devs == 0 {
-        return Err("未找到可读键盘设备（/dev/input/event*），热键引擎未启动".into());
+        return Err("未找到可读键盘设备，热键引擎未启动".into());
     }
     tracing::info!("[hotkey] 监听 {n_devs} 个键盘设备，hold={hold:?} lock={lock:?}");
 

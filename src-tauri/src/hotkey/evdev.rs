@@ -1,35 +1,20 @@
-// evdev 设备监听：枚举 /dev/input/event* 中具备键盘能力的设备，
+// evdev 设备监听（仅 Linux）：枚举 /dev/input/event* 中具备键盘能力的设备，
 // 每设备一个阻塞读线程（fetch_events 底层为阻塞 read，空闲 CPU 0），事件经 mpsc 汇聚。
 // v1 只在启动时枚举一次；热插拔监听（udev）为 P2。
 use std::fs::read_dir;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::thread::{self, JoinHandle};
+use std::thread;
 
 use evdev::{Device, EventType, KeyCode};
 
-/// 归并后的原始按键事件（规范名 + 边沿）
-#[derive(Debug, Clone)]
-pub struct RawKeyEvent {
-    pub name: String,
-    pub pressed: bool,
-}
+use super::monitor::MonitorHandle;
+use super::RawKeyEvent;
 
-/// 监听器句柄：drop 时置 stop 标志并 join 线程
-pub struct EvdevMonitor {
-    stop: Arc<AtomicBool>,
-    handles: Vec<JoinHandle<()>>,
-}
+/// 监听器句柄别名（Linux = evdev 线程组；Windows = 钩子线程组），平台无关接口
+pub type EvdevMonitor = MonitorHandle;
 
-impl Drop for EvdevMonitor {
-    fn drop(&mut self) {
-        self.stop.store(true, Ordering::Relaxed);
-        for h in self.handles.drain(..) {
-            let _ = h.join();
-        }
-    }
-}
 
 /// 判断设备是否具备键盘能力：有基本字母键 + 空格 + Ctrl
 fn is_keyboard(dev: &Device) -> bool {
@@ -90,7 +75,7 @@ pub fn spawn_monitors(tx: std::sync::mpsc::Sender<RawKeyEvent>) -> (EvdevMonitor
     }
 
     let n = handles.len();
-    (EvdevMonitor { stop, handles }, n)
+    (MonitorHandle::new(stop, handles), n)
 }
 
 /// 单设备阻塞读循环：只读不吞（事件仍留在内核供其他读者），EV_KEY 边沿事件发到 tx

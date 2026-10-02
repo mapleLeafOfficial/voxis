@@ -1,10 +1,22 @@
-// 剪贴板写入：GTK 主线程（走 mutter 原生 wl_data_device，GNOME/Wayland/X11 通用）
-// → wl-clipboard-rs（wlroots 系合成器的 data-control）→ arboard（X11/XWayland）→ xclip/xsel（命令兜底）。
-// GNOME 不支持 wlr-data-control，所以 GTK 通道必须放最前。
+// 剪贴板写入。
+// Linux 回退链：GTK 主线程（走 mutter 原生 wl_data_device，GNOME/Wayland/X11 通用）
+//   → wl-clipboard-rs（wlroots 系合成器的 data-control）→ arboard（X11/XWayland）→ xclip/xsel（命令兜底）。
+//   GNOME 不支持 wlr-data-control，所以 GTK 通道必须放最前。
+// Windows：arboard 原生（Win32 clipboard API）。
 // 粘贴前写、commit 后不清剪贴板（保留文本供手动粘贴）。
 use arboard::Clipboard;
 
-/// 写入系统剪贴板。返回 Err(原因) 表示全部通道失败。
+/// Windows：arboard 原生（Win32 clipboard API），单通道
+#[cfg(target_os = "windows")]
+pub fn copy(_app: &tauri::AppHandle, text: &str) -> Result<(), String> {
+    Clipboard::new()
+        .and_then(|mut c| c.set_text(text.to_string()))
+        .map(|_| tracing::debug!("[commit] 剪贴板写入：arboard(win)"))
+        .map_err(|e| format!("arboard 写剪贴板失败: {e}"))
+}
+
+/// 写入系统剪贴板（Linux 回退链）。返回 Err(原因) 表示全部通道失败。
+#[cfg(target_os = "linux")]
 pub fn copy(app: &tauri::AppHandle, text: &str) -> Result<(), String> {
     // 1) GTK 主线程：voxis 本身是 GTK 进程，Clipboard 走合成器原生协议（mutter 的 wl_data_device）
     if copy_gtk(app, text) {
@@ -35,7 +47,18 @@ pub fn copy(app: &tauri::AppHandle, text: &str) -> Result<(), String> {
     }
 }
 
-/// 读取系统剪贴板文本（manual 整理用）。GTK → wl-clipboard-rs → arboard。
+/// Windows：arboard 原生读取
+#[cfg(target_os = "windows")]
+pub fn paste_text(app: &tauri::AppHandle) -> Result<String, String> {
+    let _ = app;
+    Clipboard::new()
+        .and_then(|mut c| c.get_text())
+        .map(|s| s.to_string())
+        .map_err(|e| format!("arboard 读剪贴板失败: {e}"))
+}
+
+/// 读取系统剪贴板文本（manual 整理用，Linux 回退链）。GTK → wl-clipboard-rs → arboard。
+#[cfg(target_os = "linux")]
 pub fn paste_text(app: &tauri::AppHandle) -> Result<String, String> {
     if let Some(t) = paste_gtk(app) {
         return Ok(t);
@@ -121,6 +144,7 @@ fn copy_wayland(text: &str) -> Result<(), String> {
 }
 
 /// 命令行兜底：xclip → xsel
+#[cfg(target_os = "linux")]
 fn copy_command(text: &str) -> Result<(), String> {
     use std::io::Write;
     use std::process::{Command, Stdio};
@@ -148,6 +172,7 @@ fn copy_command(text: &str) -> Result<(), String> {
     Err("所有剪贴板通道均失败".into())
 }
 
+#[cfg(target_os = "linux")]
 fn which_exists(prog: &str) -> bool {
     std::process::Command::new("which")
         .arg(prog)

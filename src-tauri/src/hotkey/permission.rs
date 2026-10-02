@@ -1,5 +1,6 @@
-// 热键运行权限自检：input 组（读 /dev/input）、uinput 组（todo7 上屏注入用）、ydotoold 存活。
-// 结果只报告不阻塞（ydotoold 在 todo7 前缺失属预期）。
+// 热键运行权限自检：input 组（读 /dev/input）、uinput 组（上屏注入用）、ydotoold 存活。
+// Windows 无权限概念：直接全就绪。
+// 结果只报告不阻塞（ydotoold 在注入通道就绪前缺失属预期）。
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
@@ -14,7 +15,14 @@ pub struct PermissionStatus {
     pub problems: Vec<String>,
 }
 
-/// 执行权限检查
+/// Windows：无权限概念，全部就绪
+#[cfg(target_os = "windows")]
+pub fn check() -> PermissionStatus {
+    PermissionStatus { input_ok: true, uinput_ok: true, ydotoold_ok: true, problems: Vec::new() }
+}
+
+/// 执行权限检查（Linux）
+#[cfg(target_os = "linux")]
 pub fn check() -> PermissionStatus {
     let input_ok = has_input_access();
     let uinput_ok = has_uinput_access();
@@ -33,6 +41,7 @@ pub fn check() -> PermissionStatus {
     PermissionStatus { input_ok, uinput_ok, ydotoold_ok, problems }
 }
 
+#[cfg(target_os = "linux")]
 fn has_input_access() -> bool {
     let Ok(entries) = std::fs::read_dir("/dev/input") else {
         return false;
@@ -48,6 +57,7 @@ fn has_input_access() -> bool {
     })
 }
 
+#[cfg(target_os = "linux")]
 fn has_uinput_access() -> bool {
     std::fs::OpenOptions::new()
         .write(true)
@@ -55,6 +65,7 @@ fn has_uinput_access() -> bool {
         .is_ok()
 }
 
+#[cfg(target_os = "linux")]
 fn has_ydotoold() -> bool {
     let uid = std::fs::read_to_string("/proc/self/status")
         .ok()

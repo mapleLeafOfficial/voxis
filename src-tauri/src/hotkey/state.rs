@@ -60,7 +60,7 @@ impl HotkeyEngine {
         mut self,
         app: AppHandle,
         mgr: std::sync::Arc<SessionManager>,
-        rx: Receiver<super::evdev::RawKeyEvent>,
+        rx: Receiver<super::RawKeyEvent>,
     ) {
         loop {
             match rx.recv_timeout(TICK) {
@@ -99,7 +99,7 @@ impl HotkeyEngine {
         &mut self,
         app: &AppHandle,
         mgr: &std::sync::Arc<SessionManager>,
-        ev: super::evdev::RawKeyEvent,
+        ev: super::RawKeyEvent,
     ) {
         let desc = format!(
             "{} {}（按住: {}）",

@@ -1,7 +1,28 @@
-// evdev 键码 ↔ 规范名（配置与 UI 录制共用）。修饰键左右键归并为同一名。
-use evdev::KeyCode;
+// 规范键名层（平台无关）：配置解析、录制全集校验。
+// evdev 键码 ↔ 规范名的映射在下方 cfg(linux) 段（windows 的 vkCode 映射在 win.rs）。
+// 修饰键左右键归并为同一名。
 
-/// 键 → 规范名（Ctrl/Super/Shift/Alt/Space/…/A..Z/0..9）；不认识的键返回 None（热键状态机忽略）
+/// 平台无关：配置里的键名是否为可识别的规范名
+pub fn valid_name(name: &str) -> bool {
+    matches!(
+        name,
+        "Ctrl" | "Super" | "Shift" | "Alt" | "Space" | "Enter" | "Tab" | "Esc"
+    ) || {
+        name.len() == 1
+            && name
+                .chars()
+                .next()
+                .map(|c| c.is_ascii_alphanumeric())
+                .unwrap_or(false)
+    }
+}
+
+#[cfg(target_os = "linux")]
+mod evdev_map {
+    use super::{ALPHA, DIGITS};
+    use evdev::KeyCode;
+
+    /// 键 → 规范名（Ctrl/Super/Shift/Alt/Space/…/A..Z/0..9）；不认识的键返回 None（热键状态机忽略）
 pub fn canonical_name(key: KeyCode) -> Option<&'static str> {
     use evdev::KeyCode as K;
     let k = key.0;
@@ -27,7 +48,7 @@ pub fn canonical_name(key: KeyCode) -> Option<&'static str> {
     })
 }
 
-/// 规范名 → 代表键（配置解析用；Ctrl 取左键为代表，判定时左右等价已由 canonical_name 归并）
+    /// 规范名 → 代表键（配置解析用；Ctrl 取左键为代表，判定时左右等价已由 canonical_name 归并）
 pub fn key_from_name(name: &str) -> Option<KeyCode> {
     Some(match name {
         "Ctrl" => KeyCode::KEY_LEFTCTRL,
@@ -53,6 +74,11 @@ pub fn key_from_name(name: &str) -> Option<KeyCode> {
         _ => return None,
     })
 }
+
+}
+
+#[cfg(target_os = "linux")]
+pub use evdev_map::{canonical_name, key_from_name};
 
 const ALPHA: [&str; 26] = [
     "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S",
