@@ -12,6 +12,7 @@ mod logging;
 mod polish;
 pub mod session;
 mod state;
+mod tray;
 
 use state::AppState;
 use tauri::Manager;
@@ -60,10 +61,19 @@ pub fn run() {
             commands::polish_clipboard,
         ])
         .setup(|_app| {
-            // dev 构建直接显示主窗口，方便调试；release 由托盘/命令唤起
+            // --minimized：仅托盘常驻（自启 desktop 使用）；release 默认仅托盘
+            let minimized = std::env::args().any(|a| a == "--minimized");
             #[cfg(debug_assertions)]
-            if let Some(win) = _app.get_webview_window("main") {
-                let _ = win.show();
+            if !minimized {
+                if let Some(win) = _app.get_webview_window("main") {
+                    let _ = win.show();
+                }
+            }
+            let _ = minimized; // release 下主窗口 visible:false 已由配置保证
+
+            // 系统托盘常驻（两态图标 + 菜单）
+            if let Err(e) = tray::init(_app.handle()) {
+                tracing::error!("托盘初始化失败: {e}");
             }
 
             // 全局热键引擎：权限自检 → evdev 监听 → hold/lock 状态机

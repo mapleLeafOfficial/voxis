@@ -6,7 +6,7 @@
 - **优先级**：P1
 - **预估工作量**：~12 个文件
 - **依赖**：全部前置 todo
-- **状态**：⬜ 未开始
+- **状态**：✅ 已完成（v0.1.0 打包发布）
 
 ---
 
@@ -71,3 +71,26 @@
 ## 备注
 
 GNOME 托盘依赖 AppIndicator 扩展（此前已装 `gnome-shell-extension-appindicator`）；AppImage 在 Wayland 下托盘可能有兼容问题，README 注明 deb 为推荐安装方式。
+
+---
+
+## 完成记录（2026-10-02）
+
+### 交付内容
+- `tray.rs`：Tauri 2 tray-icon（features: tray-icon + image-png）；两态图标（ImageMagick 绘制麦克风 idle 灰/录音红，
+  include_bytes 嵌入）；左键点击 toggle 会话（Idle→start(lock=true)，进行中→stop）；右键菜单
+  （显示主窗口/设置/开关（文案随状态）/检查权限（通知汇总）/退出（录音中先走 commit 管道再退出））；
+  SessionManager::emit_state → tray::update_state 同步图标与菜单文案
+- `--minimized`：debug 构建不弹主窗（release 本就 visible:false）；托盘/快捷键照常
+- `autostart.rs`：Exec 改 current_exe() 实际路径 + --minimized
+- 设置页主题/路由：`ui://navigate` 事件 → 托盘「设置…」跳转 /settings（main.ts 监听）
+- `scripts/setup.sh`：包安装（ydotool/wl-clipboard/appindicator 检测）+ input/uinput 组 + 
+  ydotoold-voxis systemd 服务（模板按实际 uid 生成，socket 落 /run/user/<uid>/.ydotool_socket）+ 自检 ✓/✗
+- `scripts/build.sh`：bun install + tauri build，产物清单输出
+- README 重写：功能对照/安装/快捷键/配置/故障排查/隐私/开发
+
+### 验证
+- cargo/vue-tsc/vite 全零警告零错误；运行时冒烟托盘无错误日志
+- release `--minimized`：无窗口、仅托盘、热键引擎正常监听 ✓
+- 打包产物：deb 5.99MiB / rpm / AppImage 102MiB / 裸二进制 15MB ✓
+- 待实机：托盘菜单点击各项、开机自启 GNOME 生效、deb 安装后的新用户完整流程

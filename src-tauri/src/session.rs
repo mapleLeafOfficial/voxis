@@ -71,6 +71,8 @@ impl SessionManager {
 
     fn emit_state(app: &AppHandle, s: SessionState) {
         let _ = app.emit(events::STATE, s.as_str());
+        // 托盘图标/菜单文案跟随（Tray 未初始化时为 no-op）
+        crate::tray::update_state(app, s);
     }
 
     fn emit_error(app: &AppHandle, source: &str, message: String) {

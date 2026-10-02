@@ -76,6 +76,7 @@ export const EV = {
   hotkeyDebug: "hotkey://debug",
   hotkeyPermission: "hotkey://permission",
   theme: "ui://theme",
+  navigate: "ui://navigate",
 } as const;
 
 /** 提交结果三态（session://committed payload） */
