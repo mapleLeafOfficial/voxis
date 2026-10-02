@@ -90,8 +90,15 @@ impl Config {
                 max_duration: 60,
             },
             hotkey: HotkeyConfig {
+                // Windows 默认 Ctrl+Alt 系：Win 键按住/松开涉及系统行为（开始菜单），避开更干净
+                #[cfg(target_os = "linux")]
                 hold: vec!["Ctrl".into(), "Super".into()],
+                #[cfg(target_os = "linux")]
                 lock: vec!["Ctrl".into(), "Super".into(), "Shift".into()],
+                #[cfg(target_os = "windows")]
+                hold: vec!["Ctrl".into(), "Alt".into()],
+                #[cfg(target_os = "windows")]
+                lock: vec!["Ctrl".into(), "Alt".into(), "Shift".into()],
             },
             // ALSA `pipewire` PCM 跟随 WirePlumber 默认源（本机 `default` 别名不跟随，虚拟麦会静音）
             input: InputConfig { device: "pipewire".into() },
@@ -99,7 +106,10 @@ impl Config {
             polish: PolishConfig {
                 mode: "off".into(),
                 model: "qwen-flash".into(),
+                #[cfg(target_os = "linux")]
                 hotkey: "Ctrl+Super+O".into(),
+                #[cfg(target_os = "windows")]
+                hotkey: "Ctrl+Alt+O".into(),
                 prompt_override: None,
             },
             ui: UiConfig { bubble_pos: "bottom_center".into(), theme: "system".into() },

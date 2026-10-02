@@ -2,6 +2,10 @@
   <div class="rounded-lg border border-neutral-200 dark:border-neutral-700 p-4 space-y-2">
     <h3 class="text-sm font-semibold text-neutral-700 dark:text-neutral-200">权限自检</h3>
     <div v-if="!status" class="text-sm text-neutral-400">检测中…</div>
+    <div v-else-if="status.platform === 'windows'" class="flex items-center gap-2 text-sm">
+      <span class="text-emerald-500">✓</span>
+      <span class="text-neutral-600 dark:text-neutral-300">Windows 无需权限配置</span>
+    </div>
     <template v-else>
       <div v-for="item in rows" :key="item.key" class="flex items-center justify-between text-sm">
         <span class="flex items-center gap-2">

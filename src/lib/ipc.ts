@@ -51,6 +51,7 @@ export interface PermissionStatus {
   uinput_ok: boolean;
   ydotoold_ok: boolean;
   problems: string[];
+  platform: string;
 }
 
 export const getPermissionStatus = () =>

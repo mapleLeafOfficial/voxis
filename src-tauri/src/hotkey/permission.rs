@@ -13,12 +13,20 @@ pub struct PermissionStatus {
     pub ydotoold_ok: bool,
     /// 人类可读的问题摘要（空 = 全部满足）
     pub problems: Vec<String>,
+    /// 运行平台（"linux"/"windows"，前端按平台渲染面板）
+    pub platform: String,
 }
 
 /// Windows：无权限概念，全部就绪
 #[cfg(target_os = "windows")]
 pub fn check() -> PermissionStatus {
-    PermissionStatus { input_ok: true, uinput_ok: true, ydotoold_ok: true, problems: Vec::new() }
+    PermissionStatus {
+        input_ok: true,
+        uinput_ok: true,
+        ydotoold_ok: true,
+        problems: Vec::new(),
+        platform: std::env::consts::OS.into(),
+    }
 }
 
 /// 执行权限检查（Linux）
@@ -38,7 +46,7 @@ pub fn check() -> PermissionStatus {
     if !ydotoold_ok {
         problems.push("ydotoold 未运行：todo7 文字上屏将不可用（当前可忽略）".into());
     }
-    PermissionStatus { input_ok, uinput_ok, ydotoold_ok, problems }
+    PermissionStatus { input_ok, uinput_ok, ydotoold_ok, problems, platform: std::env::consts::OS.into() }
 }
 
 #[cfg(target_os = "linux")]
