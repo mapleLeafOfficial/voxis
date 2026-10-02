@@ -9,6 +9,7 @@ mod config;
 pub mod events;
 pub mod hotkey;
 mod logging;
+mod polish;
 pub mod session;
 mod state;
 
@@ -56,6 +57,7 @@ pub fn run() {
             commands::get_autostart,
             commands::set_autostart,
             commands::hotkey_suspend,
+            commands::polish_clipboard,
         ])
         .setup(|_app| {
             // dev 构建直接显示主窗口，方便调试；release 由托盘/命令唤起

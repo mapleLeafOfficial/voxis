@@ -15,7 +15,7 @@
 | 6 | 全局热键引擎（evdev hold/lock） | M1 | P0 | todo4 | ✅ |
 | 7 | 上屏引擎（剪贴板+注入粘贴） | M5 | P0 | todo4 | ✅ |
 | 8 | 设置窗口 | M6 | P1 | todo6, todo7 | ✅ |
-| 9 | 整理文字（qwen-flash 后处理） | M7 | P1 | todo7 | ⬜ |
+| 9 | 整理文字（qwen-flash 后处理） | M7 | P1 | todo7 | ✅ |
 | 10 | 托盘/自启 + 打包安装 | M8+M9 | P1 | 全部 | ⬜ |
 
 > 详细计划见 [todo1.md](todo1.md) ~ [todo10.md](todo10.md)

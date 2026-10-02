@@ -58,6 +58,16 @@ fn spawn_engine(app: &AppHandle) -> Result<(), String> {
         .ok_or_else(|| "无法读取配置，热键引擎未启动".to_string())?;
     let hold: Vec<String> = cfg.hold.iter().filter_map(|n| keys::key_from_name(n).map(|_| n.clone())).collect();
     let lock: Vec<String> = cfg.lock.iter().filter_map(|n| keys::key_from_name(n).map(|_| n.clone())).collect();
+    // polish.hotkey = "Ctrl+Super+O"（manual 整理组合；mode=off 时也解析，配置切回 manual 无需重启）
+    let polish_combo: Vec<String> = app
+        .try_state::<AppState>()
+        .and_then(|s| s.config.read().ok().map(|c| c.polish.hotkey.clone()))
+        .unwrap_or_default()
+        .split('+')
+        .map(str::trim)
+        .filter(|n| keys::key_from_name(n).is_some())
+        .map(str::to_string)
+        .collect();
     if hold.is_empty() && lock.is_empty() {
         return Err("hold/lock 均未配置有效键名，热键引擎未启动".into());
     }
@@ -74,7 +84,7 @@ fn spawn_engine(app: &AppHandle) -> Result<(), String> {
     let app2 = app.clone();
     let mgr = app.state::<AppState>().session.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        state::HotkeyEngine::new(hold, lock).run(app2, mgr, rx);
+        state::HotkeyEngine::new(hold, lock, polish_combo).run(app2, mgr, rx);
     });
 
     // 5) 句柄入 AppState：后续 restart 靠 drop 它停引擎

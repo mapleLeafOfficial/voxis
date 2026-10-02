@@ -63,6 +63,7 @@ export const getAutostart = () => invoke<boolean>("get_autostart");
 export const setAutostart = (enable: boolean) => invoke<void>("set_autostart", { enable });
 export const hotkeySuspend = (suspended: boolean) =>
   invoke<void>("hotkey_suspend", { suspended });
+export const polishClipboard = () => invoke<string>("polish_clipboard");
 
 export const EV = {
   volume: "session://volume",

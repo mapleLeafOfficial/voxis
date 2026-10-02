@@ -45,7 +45,10 @@ pub fn commit(app: &AppHandle, text: &str) -> &'static str {
         return RESULT_NONE;
     }
 
-    if let Err(e) = clipboard::copy(text) {
+    // auto 整理（polish.mode==auto 时清洗，失败回退原文并通知）；整理后的 text 参与 copy/上屏
+    let (text, _polished) = super::polish::apply_auto(app, text);
+
+    if let Err(e) = clipboard::copy(&text) {
         tracing::error!("[commit] 剪贴板写入失败: {e}");
         notify(app, "Voxis", "复制失败：无法访问剪贴板");
         let _ = app.emit(COMMITTED, CommittedPayload { text: text.to_string(), result: RESULT_COPIED.into() });

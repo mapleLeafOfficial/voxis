@@ -27,6 +27,30 @@ pub fn copy(text: &str) -> Result<(), String> {
     }
 }
 
+/// 读取系统剪贴板文本（manual 整理用）。wl-clipboard-rs → arboard 回退。
+pub fn paste_text() -> Result<String, String> {
+    #[cfg(target_os = "linux")]
+    match paste_wayland() {
+        Ok(t) => return Ok(t),
+        Err(e) => tracing::warn!("[commit] wl-clipboard 读失败: {e}，回退 arboard"),
+    }
+    Clipboard::new()
+        .and_then(|mut c| c.get_text())
+        .map(|s| s.to_string())
+        .map_err(|e| format!("arboard 读剪贴板失败: {e}"))
+}
+
+#[cfg(target_os = "linux")]
+fn paste_wayland() -> Result<String, String> {
+    use std::io::Read;
+    use wl_clipboard_rs::paste::{get_contents, ClipboardType, MimeType, Seat};
+    let (mut reader, _mime) = get_contents(ClipboardType::Regular, Seat::Unspecified, MimeType::Any)
+        .map_err(|e| format!("wayland 读剪贴板失败: {e}"))?;
+    let mut buf = String::new();
+    reader.read_to_string(&mut buf).map_err(|e| format!("读取剪贴板数据失败: {e}"))?;
+    Ok(buf)
+}
+
 #[cfg(target_os = "linux")]
 fn copy_wayland(text: &str) -> Result<(), String> {
     use wl_clipboard_rs::copy::{ClipboardType, MimeType, Options, Source};

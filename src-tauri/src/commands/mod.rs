@@ -36,6 +36,7 @@ pub fn set_config(app: AppHandle, state: State<'_, AppState>, config: Config) ->
 
     // diff（写入前取好）
     let theme_new = config.ui.theme.clone();
+    let polish_hotkey_new = config.polish.hotkey.clone();
     let hotkey_changed = old.hotkey.hold != config.hotkey.hold || old.hotkey.lock != config.hotkey.lock;
     let theme_changed = old.ui.theme != config.ui.theme;
 
@@ -49,8 +50,8 @@ pub fn set_config(app: AppHandle, state: State<'_, AppState>, config: Config) ->
     }
     tracing::info!("配置已更新并保存");
 
-    // 热键变更 → 重启引擎（立即生效，旧组合失效）
-    if hotkey_changed {
+    // 热键变更（含 manual 整理组合）→ 重启引擎（立即生效，旧组合失效）
+    if hotkey_changed || old.polish.hotkey != polish_hotkey_new {
         tracing::info!("热键配置变更，重启引擎");
         crate::hotkey::restart(&app);
     }
@@ -95,6 +96,14 @@ pub async fn test_api_key(state: State<'_, AppState>, key: String) -> Result<Str
 #[tauri::command]
 pub fn list_key_names() -> Vec<String> {
     crate::hotkey::keys::all_names()
+}
+
+/// 手动整理剪贴板（设置页/调试按钮）：返回整理后文本
+#[tauri::command]
+pub async fn polish_clipboard(app: AppHandle) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::polish::polish_clipboard_flow(&app))
+        .await
+        .map_err(|e| format!("任务失败: {e}"))?
 }
 
 /// 开机自启状态

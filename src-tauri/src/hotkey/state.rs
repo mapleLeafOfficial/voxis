@@ -29,9 +29,12 @@ pub enum TriggerKind {
 pub struct HotkeyEngine {
     hold_set: HashSet<String>,
     lock_set: HashSet<String>,
+    polish_set: HashSet<String>,
     pressed: HashSet<String>,
     /// lock 边沿武装：只有从「不含 lock 全集」→「含全集」的下沿才 toggle，避免长按重复触发
     lock_armed: bool,
+    /// polish 组合边沿武装（同 lock 逻辑，触发 manual 整理）
+    polish_armed: bool,
     /// 热键当前持有的会话来源（None = 空闲）
     session_source: Option<TriggerKind>,
     /// hold 延迟触发倒计时（窗口内被 lock 抢走则取消）
@@ -39,12 +42,14 @@ pub struct HotkeyEngine {
 }
 
 impl HotkeyEngine {
-    pub fn new(hold: Vec<String>, lock: Vec<String>) -> Self {
+    pub fn new(hold: Vec<String>, lock: Vec<String>, polish: Vec<String>) -> Self {
         Self {
             hold_set: hold.into_iter().collect(),
             lock_set: lock.into_iter().collect(),
+            polish_set: polish.into_iter().collect(),
             pressed: HashSet::new(),
             lock_armed: false,
+            polish_armed: false,
             session_source: None,
             pending_hold: None,
         }
@@ -125,6 +130,22 @@ impl HotkeyEngine {
                 self.toggle_lock(app, mgr, busy);
                 return;
             }
+            // polish：manual 整理组合（常为 hold 超集，需在 hold 窗口到期前武装，取消窗口）
+            if !self.polish_set.is_empty() && held(&self.polish_set) && !self.polish_armed {
+                self.polish_armed = true;
+                self.pending_hold = None;
+                if !busy && self.session_source.is_none() {
+                    tracing::info!("[hotkey] 触发 manual 整理");
+                    let _ = app.emit(super::EV_DEBUG, "触发 manual 整理");
+                    let app = app.clone();
+                    tauri::async_runtime::spawn_blocking(move || {
+                        if let Err(e) = crate::polish::polish_clipboard_flow(&app) {
+                            crate::commit::notify(&app, "Voxis", &format!("整理失败：{e}"));
+                        }
+                    });
+                }
+                return;
+            }
             // hold：全集达成（且 lock 不满足）→ 进延迟窗口，等可能的 lock 附加键
             if !self.hold_set.is_empty()
                 && held(&self.hold_set)
@@ -140,6 +161,10 @@ impl HotkeyEngine {
             // lock 解除武装：任一 lock 键离开按住集合
             if self.lock_armed && !held(&self.lock_set) {
                 self.lock_armed = false;
+            }
+            // polish 解除武装：任一 polish 键离开按住集合
+            if self.polish_armed && !held(&self.polish_set) {
+                self.polish_armed = false;
             }
             // hold 结束：本组合起的会话，任一 hold 键松开即停
             if self.session_source == Some(TriggerKind::Hold)

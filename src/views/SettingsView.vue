@@ -126,6 +126,59 @@
             </div>
           </section>
 
+          <!-- 整理 -->
+          <section v-show="tab === 'polish'" class="card space-y-4">
+            <h2 class="card-title">整理文字（口语清洗）</h2>
+            <div class="space-y-2">
+              <label class="flex items-center gap-2 text-sm">
+                <input v-model="cfg.polish.mode" type="radio" value="off" class="accent-blue-500" />
+                关闭（原文直通）
+              </label>
+              <label class="flex items-center gap-2 text-sm">
+                <input v-model="cfg.polish.mode" type="radio" value="auto" class="accent-blue-500" />
+                自动（每次说话上屏前先整理；失败自动回退原文）
+              </label>
+              <label class="flex items-center gap-2 text-sm">
+                <input v-model="cfg.polish.mode" type="radio" value="manual" class="accent-blue-500" />
+                手动（快捷键整理剪贴板内容）
+              </label>
+            </div>
+            <div v-if="cfg.polish.mode !== 'off'">
+              <label class="field-label">整理模型</label>
+              <select v-model="polishModelPreset" class="input w-full">
+                <option value="qwen-flash">qwen-flash（默认）</option>
+                <option value="qwen-plus">qwen-plus</option>
+                <option value="__custom">自定义…</option>
+              </select>
+              <input v-if="polishModelPreset === '__custom'" v-model="cfg.polish.model" class="input w-full mt-2" placeholder="模型名" />
+            </div>
+            <div v-if="cfg.polish.mode === 'manual'">
+              <label class="field-label">整理快捷键（整理剪贴板内容并粘贴）</label>
+              <HotkeyRecorder
+                :model-value="polishHotkeyParts"
+                label="点击录制"
+                @update:model-value="cfg.polish.hotkey = $event.join('+')"
+                @reset="cfg.polish.hotkey = 'Ctrl+Super+O'"
+              />
+            </div>
+            <div v-if="cfg.polish.mode !== 'off'">
+              <label class="field-label">自定义 Prompt（留空用内置默认）</label>
+              <textarea
+                v-model="polishPrompt"
+                rows="4"
+                class="input w-full resize-y"
+                placeholder="内置默认：剔除语气词与口头禅，理顺标点与分段，不改原意…"
+              />
+            </div>
+            <div v-if="cfg.polish.mode !== 'off'">
+              <button type="button" class="btn" :disabled="polishing" @click="onPolishTest">
+                {{ polishing ? "整理中…" : "测试：整理当前剪贴板" }}
+              </button>
+              <p v-if="polishTestResult" class="text-xs mt-2 whitespace-pre-wrap text-neutral-500 dark:text-neutral-400">{{ polishTestResult }}</p>
+              <p class="hint">注：只影响光标处粘贴，不替换已粘贴进第三方应用的内容</p>
+            </div>
+          </section>
+
           <!-- 外观 -->
           <section v-show="tab === 'appearance'" class="card space-y-4">
             <h2 class="card-title">外观</h2>
@@ -166,9 +219,9 @@
 
 <script setup lang="ts">
 // 设置主窗口：左导航 + 右表单；任何变更防抖 600ms 走 setConfig 即时持久化（Rust 侧 diff 触发热键重启/主题广播）
-import { onBeforeUnmount, onMounted, ref, watch } from "@vue/runtime-core";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "@vue/runtime-core";
 import {
-  getConfig, setConfig, listInputDevices, testApiKey, getAutostart, setAutostart,
+  getConfig, setConfig, listInputDevices, testApiKey, getAutostart, setAutostart, polishClipboard,
   type InputDevice, type VoxisConfig,
 } from "../lib/ipc";
 import HotkeyRecorder from "../components/settings/HotkeyRecorder.vue";
@@ -179,6 +232,7 @@ const TABS = [
   { id: "hotkey", label: "快捷键" },
   { id: "asr", label: "识别" },
   { id: "commit", label: "上屏" },
+  { id: "polish", label: "整理" },
   { id: "appearance", label: "外观" },
 ] as const;
 
@@ -192,6 +246,33 @@ const testOk = ref(false);
 const inputDevices = ref<InputDevice[]>([]);
 const autostart = ref(false);
 const asrModelPreset = ref("qwen-audio-3.0-asr-flash-streaming");
+const polishModelPreset = ref("qwen-flash");
+const polishPrompt = ref("");
+const polishing = ref(false);
+const polishTestResult = ref("");
+
+const polishHotkeyParts = computed({
+  get: () => cfg.value?.polish.hotkey.split("+").map((p) => p.trim()).filter(Boolean) ?? [],
+  set: (v: string[]) => {
+    if (cfg.value) cfg.value.polish.hotkey = v.join("+");
+  },
+});
+
+watch(polishPrompt, (v) => {
+  if (cfg.value) cfg.value.polish.prompt_override = v.trim() ? v : null;
+});
+
+async function onPolishTest() {
+  polishing.value = true;
+  polishTestResult.value = "";
+  try {
+    polishTestResult.value = await polishClipboard();
+  } catch (e) {
+    polishTestResult.value = `失败：${e}`;
+  } finally {
+    polishing.value = false;
+  }
+}
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -250,6 +331,8 @@ onMounted(async () => {
   asrModelPreset.value = ["qwen-audio-3.0-asr-flash-streaming", "qwen3-asr-flash-realtime"].includes(config.asr.model)
     ? config.asr.model
     : "__custom";
+  polishModelPreset.value = ["qwen-flash", "qwen-plus"].includes(config.polish.model) ? config.polish.model : "__custom";
+  polishPrompt.value = config.polish.prompt_override ?? "";
   ready.value = true;
 });
 
