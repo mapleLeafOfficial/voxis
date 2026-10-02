@@ -59,7 +59,8 @@ pub struct CaptureStream {
 }
 
 impl CaptureStream {
-    /// 打开设备并开始采集。`device_name` 为 None 或 "default" 时用系统默认输入。
+    /// 打开设备并开始采集。`device_name` 为 None 或 "default" 时用首选输入
+    /// （`pipewire` PCM，跟随 WirePlumber 默认源；不可用则回退系统默认）。
     pub fn start(
         device_name: Option<&str>,
         max_duration: Option<Duration>,
@@ -67,7 +68,7 @@ impl CaptureStream {
     ) -> Result<Self, String> {
         let host = cpal::default_host();
         let device = match device_name.filter(|s| !s.is_empty() && *s != "default") {
-            None => host.default_input_device().ok_or("没有可用的默认输入设备")?,
+            None => super::devices::resolve_default_device(&host)?,
             Some(name) => {
                 let found = host
                     .input_devices()

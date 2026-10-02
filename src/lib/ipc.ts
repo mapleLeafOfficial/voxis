@@ -40,12 +40,19 @@ export const devCaptureStart = (device?: string) =>
   invoke<void>("dev_capture_start", { device: device ?? null });
 export const devCaptureStop = () => invoke<void>("dev_capture_stop");
 
+// ---- todo4：会话 ----
+export type SessionState = "idle" | "recording" | "committing";
+export const startSession = (device?: string, lock = false) =>
+  invoke<void>("start_session", { device: device ?? null, lock });
+export const stopSession = () => invoke<void>("stop_session");
+
 // ---- 事件名常量 ----
 export const EV = {
   volume: "session://volume",
   error: "session://error",
   maxDuration: "session://max_duration_reached",
   partial: "session://partial",
+  sentence: "session://sentence",
   state: "session://state",
   committed: "session://committed",
 } as const;

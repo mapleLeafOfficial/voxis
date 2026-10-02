@@ -93,7 +93,8 @@ impl Config {
                 hold: vec!["Ctrl".into(), "Super".into()],
                 lock: vec!["Ctrl".into(), "Super".into(), "Shift".into()],
             },
-            input: InputConfig { device: "default".into() },
+            // ALSA `pipewire` PCM 跟随 WirePlumber 默认源（本机 `default` 别名不跟随，虚拟麦会静音）
+            input: InputConfig { device: "pipewire".into() },
             commit: CommitConfig { mode: "auto".into() },
             polish: PolishConfig {
                 mode: "off".into(),

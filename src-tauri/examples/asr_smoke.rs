@@ -14,12 +14,14 @@ use voxis_lib::asr::key::resolve_api_key;
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let flag = |name: &str| args.iter().any(|a| a == name);
+    let use_tauri_rt = flag("--tauri-rt");
     let value_after = |name: &str| {
         args.iter()
             .position(|a| a == name)
             .and_then(|i| args.get(i + 1))
             .cloned()
     };
+    let ws_url = value_after("--url").unwrap_or_else(|| "wss://dashscope.aliyuncs.com/api-ws/v1/inference".into());
 
     let model = value_after("--model").unwrap_or_else(|| "qwen-audio-3.0-asr-flash-streaming".into());
     let bad_key = flag("--bad-key");
@@ -43,19 +45,43 @@ fn main() {
     };
     println!("PCM: {} 帧 ({:.2}s)", pcm.len(), pcm.len() as f64 / 16000.0);
 
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(run_session(AsrConfig {
-            model,
-            ws_url: "wss://dashscope.aliyuncs.com/api-ws/v1/inference".into(),
-            api_key,
+    let closure = || {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(run_session(AsrConfig {
+            model: model.clone(),
+            ws_url: ws_url.clone(),
+            api_key: api_key.clone(),
             sample_rate: 16000,
             max_sentence_silence_ms: 1300,
             semantic_punctuation: true,
             language_hints: None,
-        }, pcm, bad_key));
+                        prefer_ipv4: true,
+        }, pcm.clone(), bad_key))
+    };
+    if use_tauri_rt {
+        tauri::async_runtime::block_on(async {
+            // 用 Tauri 托管 runtime 跑同一逻辑（对照实验）
+            let t0 = Instant::now();
+            let cfg = AsrConfig {
+                model,
+                ws_url,
+                api_key,
+                sample_rate: 16000,
+                max_sentence_silence_ms: 1300,
+                semantic_punctuation: true,
+                language_hints: None,
+                        prefer_ipv4: true,
+            };
+            let r = run_session(cfg, pcm, bad_key).await;
+            println!("[tauri-rt] 总耗时 {:.1}s", t0.elapsed().as_secs_f32());
+            r
+        });
+    } else {
+        closure();
+    }
 }
 
 async fn run_session(cfg: AsrConfig, pcm: Vec<i16>, expect_fail: bool) {
@@ -100,12 +126,22 @@ async fn run_session(cfg: AsrConfig, pcm: Vec<i16>, expect_fail: bool) {
     });
 
     // 实时节奏发送（1600 帧 = 100ms）；会话失败后发送会报错，优雅退出
+    // --delay-finish <ms>：模拟 SessionManager 式延迟收尾（泵完后再等 N ms 才 finish）
+    let delay_finish: u64 = std::env::args()
+        .position(|a| a == "--delay-finish")
+        .and_then(|i| std::env::args().nth(i + 1))
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0);
     for chunk in pcm.chunks(1600) {
         if session.send_pcm(chunk.to_vec()).await.is_err() {
             println!("── 会话已关闭，停止发送 ──");
             break;
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    if delay_finish > 0 {
+        println!("── 泵完，延迟 {delay_finish}ms 后 finish ──");
+        tokio::time::sleep(Duration::from_millis(delay_finish)).await;
     }
     let _ = session.finish().await;
     println!("── 音频发送完毕，finish-task 已发出 ──");

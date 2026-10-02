@@ -2,6 +2,10 @@
 use cpal::traits::{DeviceTrait, HostTrait};
 use serde::Serialize;
 
+/// 路由首选设备： ALSA 的 `pipewire` PCM 由 WirePlumber 动态路由到当前默认源
+/// （本机实测 `default` 别名不跟随默认源切换，虚拟麦克风场景会录到静音）
+pub const PREFERRED_DEVICE: &str = "pipewire";
+
 #[derive(Debug, Clone, Serialize)]
 pub struct InputDevice {
     /// 设备名（同时作为配置里的 device id）
@@ -33,7 +37,18 @@ pub fn list_input_devices() -> Result<Vec<InputDevice>, String> {
             });
         }
     }
-    // 默认设备排最前
-    out.sort_by_key(|d| !d.is_default);
+    // 排序：pipewire（路由首选）→ ALSA default → 其余
+    out.sort_by_key(|d| {
+        if d.name == PREFERRED_DEVICE { 0 } else if d.is_default { 1 } else { 2 }
+    });
     Ok(out)
+}
+
+/// 解析「未指定设备」时应使用的设备：优先 `pipewire` PCM，退回系统默认
+pub fn resolve_default_device(host: &cpal::Host) -> Result<cpal::Device, String> {
+    host.devices()
+        .map_err(|e| format!("枚举设备失败: {e}"))?
+        .find(|d| d.name().map(|n| n == PREFERRED_DEVICE).unwrap_or(false))
+        .or_else(|| host.default_input_device())
+        .ok_or_else(|| "没有可用的输入设备".to_string())
 }

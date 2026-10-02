@@ -1,7 +1,8 @@
-// Voxis IPC 命令（todo1 基础命令 + todo2 录音命令）
+// Voxis IPC 命令（todo1 基础 + todo2 录音 + todo4 会话）
 use crate::audio::capture::CaptureCallbacks;
 use crate::audio::devices;
 use crate::config::{self, Config};
+use crate::events;
 use crate::state::AppState;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -66,7 +67,7 @@ pub fn dev_capture_start(
         Some(max_duration),
         CaptureCallbacks {
             on_volume: Box::new(move |level| {
-                let _ = emitter.emit("session://volume", level);
+                let _ = emitter.emit(events::VOLUME, level);
             }),
             on_pcm: Box::new(|chunk| {
                 // todo3/todo4 接 ASR；当前仅统计
@@ -75,16 +76,13 @@ pub fn dev_capture_start(
             on_max_duration: {
                 let em = app.clone();
                 Box::new(move || {
-                    let _ = em.emit("session://max_duration_reached", ());
+                    let _ = em.emit(events::MAX_DURATION, ());
                 })
             },
             on_error: {
                 let em = app.clone();
                 Box::new(move |msg| {
-                    let _ = em.emit(
-                        "session://error",
-                        serde_json::json!({ "source": "audio", "message": msg }),
-                    );
+                    let _ = em.emit(events::ERROR, events::ErrorPayload { source: "audio".into(), message: msg });
                 })
             },
         },
@@ -97,4 +95,24 @@ pub fn dev_capture_start(
 #[tauri::command]
 pub fn dev_capture_stop(state: State<'_, AppState>) -> Result<(), String> {
     state.capture.stop()
+}
+
+/// 开始语音会话（todo6 由热键接管触发；`lock` 仅记录，语义在 todo6）
+#[tauri::command]
+pub async fn start_session(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    device: Option<String>,
+    lock: Option<bool>,
+) -> Result<(), String> {
+    state
+        .session
+        .start(&app, device, lock.unwrap_or(false), None)
+        .await
+}
+
+/// 结束语音会话（幂等）
+#[tauri::command]
+pub async fn stop_session(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    state.session.stop(&app).await
 }

@@ -21,6 +21,9 @@ pub fn build_run_task(
         "sample_rate": sample_rate,
         "max_sentence_silence": max_sentence_silence_ms,
         "semantic_punctuation_enabled": semantic_punctuation,
+        // 官方文档：默认 false 时，持续静音音频会导致连接超时断开（说话停顿 >2s 即触发）。
+        // true = 静音期间保持连接，配合 stop() 主动 finish-task 正常收尾。
+        "heartbeat": true,
     });
     if let Some(langs) = language_hints {
         if !langs.is_empty() {

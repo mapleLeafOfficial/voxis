@@ -9,9 +9,12 @@ import {
   listInputDevices,
   devCaptureStart,
   devCaptureStop,
+  startSession,
+  stopSession,
   EV,
   type VoxisConfig,
   type InputDevice,
+  type SessionState,
 } from "../lib/ipc";
 
 const output = ref<string>("# DevView — 临时开发面板\n");
@@ -86,6 +89,43 @@ const stopCapture = async () => {
   }
 };
 
+// ---- todo4：会话测试 ----
+const sessionState = ref<SessionState>("idle");
+const partialText = ref("");
+const finalText = ref("");
+const sessionSentences = ref<string[]>([]);
+
+const startSessionClick = async () => {
+  try {
+    sessionSentences.value = [];
+    partialText.value = "";
+    finalText.value = "";
+    await startSession(selected.value === "default" ? undefined : selected.value);
+    log("start_session", "已请求");
+  } catch (e) {
+    log("start_session 错误", String(e));
+  }
+};
+
+const stopSessionClick = async () => {
+  try {
+    await stopSession();
+  } catch (e) {
+    log("stop_session 错误", String(e));
+  }
+};
+
+const stateLabel: Record<SessionState, string> = {
+  idle: "空闲",
+  recording: "录音中",
+  committing: "收尾中",
+};
+const stateClass: Record<SessionState, string> = {
+  idle: "bg-neutral-700 text-neutral-300",
+  recording: "bg-red-600 text-white animate-pulse",
+  committing: "bg-amber-600 text-white",
+};
+
 onMounted(async () => {
   unlisteners.push(
     await listen<number>(EV.volume, (e) => (volume.value = e.payload)),
@@ -96,6 +136,21 @@ onMounted(async () => {
       capturing.value = false;
       volume.value = 0;
       log("max_duration", "达到最长录音时长，已自动停止");
+    }),
+    // ---- todo4：会话事件 ----
+    await listen<SessionState>(EV.state, (e) => {
+      sessionState.value = e.payload;
+      if (e.payload === "idle") capturing.value = false;
+      log("session://state", e.payload);
+    }),
+    await listen<string>(EV.partial, (e) => (partialText.value = e.payload)),
+    await listen<string>(EV.sentence, (e) => {
+      sessionSentences.value.push(e.payload);
+      partialText.value = "";
+    }),
+    await listen<{ text: string }>(EV.committed, (e) => {
+      finalText.value = e.payload.text;
+      log("session://committed", e.payload.text || "（空文本：未说话或未识别）");
     }),
   );
   await refreshDevices();
@@ -140,6 +195,34 @@ onBeforeUnmount(() => unlisteners.forEach((u) => u()));
           <div class="h-full bg-gradient-to-r from-emerald-500 to-red-500 transition-[width] duration-75" :style="{ width: `${(volume * 100).toFixed(0)}%` }" />
         </div>
         <span class="text-xs text-neutral-500 w-12 text-right">{{ (volume * 100).toFixed(0) }}%</span>
+      </div>
+    </div>
+
+    <!-- 会话测试面板（todo4，M1） -->
+    <div class="border border-neutral-800 rounded-lg p-4 mb-4">
+      <div class="flex items-center gap-3 flex-wrap mb-3">
+        <span class="text-sm text-neutral-400">会话测试：</span>
+        <span class="px-2 py-0.5 rounded text-xs" :class="stateClass[sessionState]">{{ stateLabel[sessionState] }}</span>
+        <button
+          class="px-3 py-1.5 rounded text-sm"
+          :class="sessionState === 'idle' ? 'bg-violet-600 hover:bg-violet-500' : 'bg-red-600 hover:bg-red-500'"
+          :disabled="sessionState === 'committing'"
+          @click="sessionState === 'idle' ? startSessionClick() : stopSessionClick()"
+        >
+          {{ sessionState === "idle" ? "🎤 开始会话" : "⏹ 结束会话" }}
+        </button>
+        <span class="text-xs text-neutral-600">使用上方选中的设备；说话 → partial 实时刷新，结束 → 2s 内出全文</span>
+      </div>
+      <div class="space-y-2 text-sm">
+        <div v-if="sessionSentences.length || partialText" class="bg-neutral-900 rounded p-3">
+          <div class="text-neutral-500 text-xs mb-1">实时（已断句 + 当前 partial）</div>
+          <span class="text-neutral-200">{{ sessionSentences.join(" ") }}</span>
+          <span class="text-neutral-500">{{ partialText }}</span>
+        </div>
+        <div v-if="finalText" class="bg-neutral-900 rounded p-3">
+          <div class="text-neutral-500 text-xs mb-1">最终结果（committed）</div>
+          <span class="text-emerald-300">{{ finalText }}</span>
+        </div>
       </div>
     </div>
 
