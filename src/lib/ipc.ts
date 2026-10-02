@@ -56,7 +56,14 @@ export interface PermissionStatus {
 export const getPermissionStatus = () =>
   invoke<PermissionStatus>("get_permission_status");
 
-// ---- 事件名常量 ----
+// ---- todo8：设置 ----
+export const testApiKey = (key: string) => invoke<string>("test_api_key", { key });
+export const listKeyNames = () => invoke<string[]>("list_key_names");
+export const getAutostart = () => invoke<boolean>("get_autostart");
+export const setAutostart = (enable: boolean) => invoke<void>("set_autostart", { enable });
+export const hotkeySuspend = (suspended: boolean) =>
+  invoke<void>("hotkey_suspend", { suspended });
+
 export const EV = {
   volume: "session://volume",
   error: "session://error",
@@ -67,6 +74,7 @@ export const EV = {
   committed: "session://committed",
   hotkeyDebug: "hotkey://debug",
   hotkeyPermission: "hotkey://permission",
+  theme: "ui://theme",
 } as const;
 
 /** 提交结果三态（session://committed payload） */

@@ -2,6 +2,7 @@
 pub mod asr;
 pub mod audio;
 mod bubble;
+mod autostart;
 mod commands;
 mod commit;
 mod config;
@@ -50,6 +51,11 @@ pub fn run() {
             commands::start_session,
             commands::stop_session,
             commands::get_permission_status,
+            commands::test_api_key,
+            commands::list_key_names,
+            commands::get_autostart,
+            commands::set_autostart,
+            commands::hotkey_suspend,
         ])
         .setup(|_app| {
             // dev 构建直接显示主窗口，方便调试；release 由托盘/命令唤起

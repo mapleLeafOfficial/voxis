@@ -405,7 +405,7 @@ impl CollectorHandles {
     }
 }
 
-fn build_asr_config(cfg: &Config, api_key: String) -> AsrConfig {
+pub fn build_asr_config(cfg: &Config, api_key: String) -> AsrConfig {
     let lang = cfg.asr.language.trim();
     AsrConfig {
         model: cfg.asr.model.clone(),

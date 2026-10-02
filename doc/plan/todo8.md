@@ -6,7 +6,7 @@
 - **优先级**：P1
 - **预估工作量**：~14 个文件
 - **依赖**：todo6、todo7（配置项生效依赖对应模块）
-- **状态**：⬜ 未开始
+- **状态**：✅ 已完成（运行时验证通过；设置页 UI 交互待实机点验）
 
 ---
 
@@ -64,3 +64,27 @@
 ## 备注
 
 UI 风格 Tailwind 简洁卡片式，跟随系统深浅色；不做自定义主题色。
+
+---
+
+## 完成记录（2026-10-02）
+
+### 交付内容（实际 6 文件，页面内联未拆多 tab 组件）
+- `SettingsView.vue`：左导航（账户/快捷键/识别/上屏/外观）+ 卡片表单；全部变更防抖 600ms 走 setConfig 即时持久化
+- `HotkeyRecorder.vue`：录制 = hotkeySuspend(true) → webview keydown 捕获（event.code→规范名，与 keys.rs 同源归并）→ keyup 结束 → suspend(false) → v-model；Esc 取消
+- `PermissionPanel.vue`：input/uinput/ydotoold 三态 + 修复命令一键复制
+- Rust：set_config 增强（diff 热键变更→restart 引擎、主题变更→emit ui://theme）；新命令 test_api_key（复用 AsrSession::start 真实 WS 握手等到 task-started，即测即停）、list_key_names、get/set_autostart、hotkey_suspend
+- hotkey/mod.rs 重构：start/restart 共用 spawn_engine；EvdevMonitor 存 AppState（drop 即停读线程→rx 断开→状态机退）
+- autostart.rs：XDG autostart desktop 文件写/删（Exec 占位，todo10 打包后校正）
+- 路由 /settings 换 SettingsView，删除占位组件；DevView 入口改名「→ 设置」
+
+### 运行时验证（uinput 注入，新实例）
+- 引擎重启后正常监听 2 设备；hold 注入触发→结束→空文本「提交结果: none」（todo7 编排正确复用）✓
+- 悬空设计：录制期间引擎丢弃全部事件（含 up），保存后 restart 引擎自动清空脏状态
+
+### 待实机点验
+- [ ] 设置页改 hold 为 Alt+S → 立即按新组合触发、旧组合失效
+- [ ] 测试按钮：正确 Key 成功 / 错误 Key 报原因
+- [ ] 权限面板修复命令可复制执行
+- [ ] 自启开关生成/删除 ~/.config/autostart/voxis.desktop
+- [ ] 主题切换气泡即时跟随（ui://theme 广播）

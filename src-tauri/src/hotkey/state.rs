@@ -9,7 +9,7 @@ use std::collections::HashSet;
 use std::sync::mpsc::Receiver;
 use std::time::Duration;
 
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::session::{SessionManager, SessionState};
 
@@ -59,7 +59,17 @@ impl HotkeyEngine {
     ) {
         loop {
             match rx.recv_timeout(TICK) {
-                Ok(ev) => self.on_event(&app, &mgr, ev),
+                Ok(ev) => {
+                    // 暂停中（设置页录制组合键）：丢弃事件（含 up——录制结束保存配置会 restart 引擎重置状态）
+                    if app
+                        .try_state::<crate::state::AppState>()
+                        .map(|s| s.hotkey_suspended.load(std::sync::atomic::Ordering::Relaxed))
+                        .unwrap_or(false)
+                    {
+                        continue;
+                    }
+                    self.on_event(&app, &mgr, ev);
+                }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
             }

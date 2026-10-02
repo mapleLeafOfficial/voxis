@@ -15,8 +15,7 @@ const router = createRouter({
     {
       path: "/settings",
       name: "settings",
-      // todo8 实现完整设置页，此处占位
-      component: () => import("./views/SettingsPlaceholder.vue"),
+      component: () => import("./views/SettingsView.vue"),
     },
   ],
 });

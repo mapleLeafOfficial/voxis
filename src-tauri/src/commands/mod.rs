@@ -1,11 +1,15 @@
-// Voxis IPC 命令（todo1 基础 + todo2 录音 + todo4 会话）
+// Voxis IPC 命令（todo1 基础 + todo2 录音 + todo4 会话 + todo8 设置）
 use crate::audio::capture::CaptureCallbacks;
 use crate::audio::devices;
 use crate::config::{self, Config};
 use crate::events;
 use crate::state::AppState;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
+
+/// 主题变更事件（气泡等窗口即时跟随）
+pub const EV_THEME: &str = "ui://theme";
 
 #[tauri::command]
 pub fn ping() -> String {
@@ -22,15 +26,96 @@ pub fn get_config(state: State<'_, AppState>) -> Result<Config, String> {
 }
 
 #[tauri::command]
-pub fn set_config(state: State<'_, AppState>, config: Config) -> Result<(), String> {
-    config::save(&config)?;
-    let mut guard = state
+pub fn set_config(app: AppHandle, state: State<'_, AppState>, config: Config) -> Result<(), String> {
+    // 旧值快照（diff 用）
+    let old = state
         .config
-        .write()
+        .read()
+        .map(|c| c.clone())
         .map_err(|e| format!("配置锁中毒: {e}"))?;
-    *guard = config;
+
+    // diff（写入前取好）
+    let theme_new = config.ui.theme.clone();
+    let hotkey_changed = old.hotkey.hold != config.hotkey.hold || old.hotkey.lock != config.hotkey.lock;
+    let theme_changed = old.ui.theme != config.ui.theme;
+
+    config::save(&config)?;
+    {
+        let mut guard = state
+            .config
+            .write()
+            .map_err(|e| format!("配置锁中毒: {e}"))?;
+        *guard = config;
+    }
     tracing::info!("配置已更新并保存");
+
+    // 热键变更 → 重启引擎（立即生效，旧组合失效）
+    if hotkey_changed {
+        tracing::info!("热键配置变更，重启引擎");
+        crate::hotkey::restart(&app);
+    }
+    // 主题变更 → 广播（气泡即时跟随）
+    if theme_changed {
+        let _ = app.emit(EV_THEME, theme_new);
+    }
+    // 音频设备/ASR 参数：下次会话自动生效（start_session 时读配置），无需动作
     Ok(())
+}
+
+/// 测试 API Key 连通性：用给定 key 走一次真实 WS 握手（等到 task-started 才算成功），随即立即收尾
+#[tauri::command]
+pub async fn test_api_key(state: State<'_, AppState>, key: String) -> Result<String, String> {
+    let cfg = {
+        let snapshot = state
+            .config
+            .read()
+            .map(|c| c.clone())
+            .map_err(|e| format!("配置锁中毒: {e}"))?;
+        crate::session::build_asr_config(&snapshot, key)
+    };
+    // 复用 AsrSession::start：它等到 task-started 才返回，key 无效会在握手/建任务阶段报错
+    let fut = async {
+        let (session, mut rx) = crate::asr::client::AsrSession::start(cfg).await?;
+        session.request_stop();
+        // 排干事件流（最多 1s），确保服务端侧会话关闭
+        let _ = tokio::time::timeout(Duration::from_millis(1000), async {
+            while let Some(_ev) = rx.recv().await {}
+        })
+        .await;
+        Ok::<(), String>(())
+    };
+    match tokio::time::timeout(Duration::from_secs(15), fut).await {
+        Err(_) => Err("连接超时（15s）：检查网络或 ws_url".into()),
+        Ok(Err(e)) => Err(e),
+        Ok(Ok(())) => Ok("连接成功，Key 有效".into()),
+    }
+}
+
+/// 可录入的规范键名全集（快捷键录制下拉/校验用）
+#[tauri::command]
+pub fn list_key_names() -> Vec<String> {
+    crate::hotkey::keys::all_names()
+}
+
+/// 开机自启状态
+#[tauri::command]
+pub fn get_autostart() -> bool {
+    crate::autostart::is_enabled()
+}
+
+/// 开/关开机自启（写/删 ~/.config/autostart/voxis.desktop）
+#[tauri::command]
+pub fn set_autostart(enable: bool) -> Result<(), String> {
+    crate::autostart::set_enabled(enable)
+}
+
+/// 暂停/恢复热键引擎（设置页录制组合键时用，避免录制过程触发会话）
+#[tauri::command]
+pub fn hotkey_suspend(state: State<'_, AppState>, suspended: bool) {
+    state
+        .hotkey_suspended
+        .store(suspended, Ordering::Relaxed);
+    tracing::info!("[hotkey] suspended = {suspended}");
 }
 
 /// 显示主窗口（dev 阶段入口；todo10 托盘接管）

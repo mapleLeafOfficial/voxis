@@ -189,7 +189,7 @@ onBeforeUnmount(() => unlisteners.forEach((u) => u()));
       <button class="px-3 py-1.5 rounded bg-neutral-700 hover:bg-neutral-600 text-sm" @click="doGetConfig">get_config</button>
       <button class="px-3 py-1.5 rounded bg-neutral-700 hover:bg-neutral-600 text-sm" @click="doSetConfig">set_config（保存当前值）</button>
       <button class="px-3 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-sm" @click="showMainWindow">show_main_window</button>
-      <router-link to="/settings" class="px-3 py-1.5 rounded bg-neutral-800 hover:bg-neutral-700 text-sm">→ /settings 占位</router-link>
+      <router-link to="/settings" class="px-3 py-1.5 rounded bg-neutral-800 hover:bg-neutral-700 text-sm">→ 设置</router-link>
     </div>
 
     <!-- 采集测试面板（todo2） -->

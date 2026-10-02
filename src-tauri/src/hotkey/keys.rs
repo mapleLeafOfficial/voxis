@@ -59,3 +59,16 @@ const ALPHA: [&str; 26] = [
     "T", "U", "V", "W", "X", "Y", "Z",
 ];
 const DIGITS: [&str; 10] = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+
+/// 设置页可录制的规范键名全集（修饰键 + 功能键 + 字母 + 数字）
+pub fn all_names() -> Vec<String> {
+    let mut v: Vec<String> = [
+        "Ctrl", "Super", "Shift", "Alt", "Space", "Enter", "Tab", "Esc",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect();
+    v.extend(ALPHA.iter().map(|s| s.to_string()));
+    v.extend(DIGITS.iter().map(|s| s.to_string()));
+    v
+}
