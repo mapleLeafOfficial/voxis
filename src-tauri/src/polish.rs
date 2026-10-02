@@ -111,7 +111,7 @@ pub fn polish_clipboard_flow(app: &AppHandle) -> Result<String, String> {
     if polish.mode == "off" {
         return Err("整理功能已关闭（polish.mode=off）".into());
     }
-    let text = super::commit::clipboard::paste_text()?;
+    let text = super::commit::clipboard::paste_text(app)?;
     if text.trim().is_empty() {
         return Err("剪贴板没有文本".into());
     }
@@ -123,7 +123,7 @@ pub fn polish_clipboard_flow(app: &AppHandle) -> Result<String, String> {
     if polished.trim().is_empty() {
         return Err("整理结果为空".into());
     }
-    super::commit::clipboard::copy(&polished)?;
+    super::commit::clipboard::copy(app, &polished)?;
     tracing::info!("[polish] manual 完成（{}ms）：{} 字 → {} 字",
         t0.elapsed().as_millis(), text.trim().chars().count(), polished.chars().count());
     // 尝试注入粘贴；局限：只影响光标处，不替换已粘贴进第三方应用的内容

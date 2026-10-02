@@ -1,11 +1,19 @@
-// 剪贴板写入：wl-clipboard-rs（Wayland 原生）→ arboard（跨平台回退）→ xclip/xsel（X11 命令兜底）。
+// 剪贴板写入：GTK 主线程（走 mutter 原生 wl_data_device，GNOME/Wayland/X11 通用）
+// → wl-clipboard-rs（wlroots 系合成器的 data-control）→ arboard（X11/XWayland）→ xclip/xsel（命令兜底）。
+// GNOME 不支持 wlr-data-control，所以 GTK 通道必须放最前。
 // 粘贴前写、commit 后不清剪贴板（保留文本供手动粘贴）。
 use arboard::Clipboard;
 
 /// 写入系统剪贴板。返回 Err(原因) 表示全部通道失败。
-pub fn copy(text: &str) -> Result<(), String> {
-    // 1) Wayland 原生：fork 模式派生后台进程持有剪贴板（直到被覆盖），不阻塞
-    #[cfg(target_os = "linux")]
+pub fn copy(app: &tauri::AppHandle, text: &str) -> Result<(), String> {
+    // 1) GTK 主线程：voxis 本身是 GTK 进程，Clipboard 走合成器原生协议（mutter 的 wl_data_device）
+    if copy_gtk(app, text) {
+        tracing::debug!("[commit] 剪贴板写入：GTK");
+        return Ok(());
+    }
+    tracing::warn!("[commit] GTK 剪贴板失败，回退 wl-clipboard-rs");
+
+    // 2) Wayland data-control（wlroots 系）
     match copy_wayland(text) {
         Ok(()) => {
             tracing::debug!("[commit] 剪贴板写入：wl-clipboard-rs");
@@ -14,7 +22,7 @@ pub fn copy(text: &str) -> Result<(), String> {
         Err(e) => tracing::warn!("[commit] wl-clipboard-rs 失败: {e}，回退 arboard"),
     }
 
-    // 2) arboard（X11 / 通用）
+    // 3) arboard（X11 / 通用）
     match Clipboard::new().and_then(|mut c| c.set_text(text.to_string())) {
         Ok(()) => {
             tracing::debug!("[commit] 剪贴板写入：arboard");
@@ -27,9 +35,12 @@ pub fn copy(text: &str) -> Result<(), String> {
     }
 }
 
-/// 读取系统剪贴板文本（manual 整理用）。wl-clipboard-rs → arboard 回退。
-pub fn paste_text() -> Result<String, String> {
-    #[cfg(target_os = "linux")]
+/// 读取系统剪贴板文本（manual 整理用）。GTK → wl-clipboard-rs → arboard。
+pub fn paste_text(app: &tauri::AppHandle) -> Result<String, String> {
+    if let Some(t) = paste_gtk(app) {
+        return Ok(t);
+    }
+    tracing::warn!("[commit] GTK 剪贴板读失败，回退 wl-clipboard-rs");
     match paste_wayland() {
         Ok(t) => return Ok(t),
         Err(e) => tracing::warn!("[commit] wl-clipboard 读失败: {e}，回退 arboard"),
@@ -38,6 +49,54 @@ pub fn paste_text() -> Result<String, String> {
         .and_then(|mut c| c.get_text())
         .map(|s| s.to_string())
         .map_err(|e| format!("arboard 读剪贴板失败: {e}"))
+}
+
+/// GTK 剪贴板（必须主线程；copy 从 spawn_blocking 调用，用 run_on_main_thread + channel 回传）。
+#[cfg(target_os = "linux")]
+fn copy_gtk(app: &tauri::AppHandle, text: &str) -> bool {
+    use std::sync::mpsc;
+    let (tx, rx) = mpsc::channel::<bool>();
+    let text = text.to_string();
+    if app.run_on_main_thread(move || {
+        let _ = tx.send(gtk_copy_impl(&text));
+    })
+    .is_err()
+    {
+        return false;
+    }
+    rx.recv_timeout(std::time::Duration::from_secs(1)).unwrap_or(false)
+}
+
+#[cfg(target_os = "linux")]
+fn gtk_copy_impl(text: &str) -> bool {
+    let Some(display) = gtk::gdk::Display::default() else {
+        return false;
+    };
+    let Some(clip) = gtk::Clipboard::default(&display) else {
+        return false;
+    };
+    clip.set_text(text);
+    clip.store(); // 交给剪贴板管理器持久化，本进程不再需要持有
+    true
+}
+
+/// GTK 读剪贴板（主线程，机制同 copy_gtk）
+#[cfg(target_os = "linux")]
+fn paste_gtk(app: &tauri::AppHandle) -> Option<String> {
+    use std::sync::mpsc;
+    let (tx, rx) = mpsc::channel::<Option<String>>();
+    if app.run_on_main_thread(move || {
+        let text = gtk::gdk::Display::default()
+            .and_then(|d| gtk::Clipboard::default(&d))
+            .and_then(|c| c.wait_for_text())
+            .map(|s| s.to_string());
+        let _ = tx.send(text);
+    })
+    .is_err()
+    {
+        return None;
+    }
+    rx.recv_timeout(std::time::Duration::from_secs(1)).ok().flatten()
 }
 
 #[cfg(target_os = "linux")]

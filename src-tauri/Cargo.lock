@@ -5483,6 +5483,7 @@ dependencies = [
  "dirs 6.0.0",
  "evdev",
  "futures-util",
+ "gtk",
  "gtk-layer-shell",
  "reqwest",
  "serde",

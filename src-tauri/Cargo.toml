@@ -43,3 +43,4 @@ strip = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk-layer-shell = { version = "0.8.2", features = ["v0_5"] }
+gtk = "0.18"
