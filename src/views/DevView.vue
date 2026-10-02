@@ -15,7 +15,14 @@ import {
   type VoxisConfig,
   type InputDevice,
   type SessionState,
+  type PermissionStatus,
+  getPermissionStatus,
 } from "../lib/ipc";
+
+// ---- todo6：热键调试 ----
+const perm = ref<PermissionStatus | null>(null);
+const heldKeys = ref("");
+const hotkeyLog = ref("");
 
 const output = ref<string>("# DevView — 临时开发面板\n");
 const log = (label: string, data: unknown) => {
@@ -152,7 +159,20 @@ onMounted(async () => {
       finalText.value = e.payload.text;
       log("session://committed", e.payload.text || "（空文本：未说话或未识别）");
     }),
+    // ---- todo6：热键调试事件 ----
+    await listen<string>(EV.hotkeyDebug, (e) => {
+      if (e.payload.includes("↓") || e.payload.includes("↑")) {
+        heldKeys.value = e.payload.split("（按住: ")[1]?.replace("）", "") ?? "";
+      } else {
+        hotkeyLog.value = e.payload;
+      }
+    }),
+    await listen<PermissionStatus>(EV.hotkeyPermission, (e) => {
+      perm.value = e.payload;
+      log("hotkey://permission", e.payload);
+    }),
   );
+  getPermissionStatus().then((p) => (perm.value = p)).catch(() => {});
   await refreshDevices();
   doGetConfig();
 });
@@ -224,6 +244,21 @@ onBeforeUnmount(() => unlisteners.forEach((u) => u()));
           <span class="text-emerald-300">{{ finalText }}</span>
         </div>
       </div>
+    </div>
+
+    <!-- 热键调试面板（todo6） -->
+    <div class="border border-neutral-800 rounded-lg p-4 mb-4">
+      <div class="flex items-center gap-3 flex-wrap mb-2">
+        <span class="text-sm text-neutral-400">热键：</span>
+        <span class="px-2 py-0.5 rounded text-xs" :class="perm ? (perm.input_ok ? 'bg-emerald-800 text-emerald-200' : 'bg-red-800 text-red-200') : 'bg-neutral-800 text-neutral-400'">
+          {{ perm ? (perm.input_ok ? "input ✓" : "input ✗") : "检查中…" }}
+        </span>
+        <span class="px-2 py-0.5 rounded text-xs" :class="perm?.uinput_ok ? 'bg-emerald-800 text-emerald-200' : 'bg-neutral-800 text-neutral-500'">uinput {{ perm?.uinput_ok ? "✓" : "✗" }}</span>
+        <span class="px-2 py-0.5 rounded text-xs" :class="perm?.ydotoold_ok ? 'bg-emerald-800 text-emerald-200' : 'bg-neutral-800 text-neutral-500'">ydotoold {{ perm?.ydotoold_ok ? "✓" : "✗" }}</span>
+        <span v-if="heldKeys" class="font-mono text-xs text-amber-300">按住: {{ heldKeys }}</span>
+        <span class="text-xs text-neutral-600">按住 Ctrl+Win 说话 → 松开结束；Ctrl+Win+Shift toggle</span>
+      </div>
+      <div class="text-xs text-neutral-500">最近触发：<span class="text-neutral-300">{{ hotkeyLog || "（无）" }}</span></div>
     </div>
 
     <pre class="bg-black rounded p-4 text-xs overflow-auto max-h-[50vh] whitespace-pre-wrap">{{ output }}</pre>

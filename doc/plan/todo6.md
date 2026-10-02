@@ -6,7 +6,7 @@
 - **优先级**：P0
 - **预估工作量**：~7 个文件
 - **依赖**：todo4
-- **状态**：⬜ 未开始
+- **状态**：✅ 已完成（uinput 注入全链路验证通过，见完成记录）
 
 ---
 
@@ -63,5 +63,28 @@ evdev 直读 `/dev/input` 实现系统级组合键监听：hold 模式（按住 
 
 ## 备注
 
-- 部署依赖：`sudo usermod -aG input,uinput guxing` + 重登录生效；ydotool 完整接入在 todo7
+- 部署依赖：`sudo usermod -aG input,uinput guxing` + 重登录生效（**本机已执行**，桌面会话需重登录）；ydotool 完整接入在 todo7
 - 笔记本多键盘设备（内建+外接）需多设备汇聚，组合键跨设备按下属边缘 case，v1 不保证
+
+---
+
+## 完成记录（2026-10-02）
+
+### 交付内容
+- `hotkey/keys.rs`：evdev KeyCode ↔ 规范名（左右修饰键归并 Ctrl/Super/Shift/Alt；A-Z/0-9/Space/…）
+- `hotkey/evdev.rs`：枚举 /dev/input/event*（is_keyboard = KEY_A+KEY_SPACE+KEY_LEFTCTRL 能力位），每设备阻塞读线程 → mpsc 汇聚；drop 即停
+- `hotkey/state.rs`：状态机（lock 优先 + hold 150ms 延迟窗口）：
+  - lock 全集达成 → 立即 toggle（lock ⊇ hold，必须先判，否则 lock 必被 hold 抢触发——首版踩坑已修）
+  - 仅 hold 达成 → 延迟 150ms 触发，窗口内补按出 lock 全集则取消 hold 改触发 lock
+  - hold 会话开始后补按 Shift → 仍按 hold 语义（todo6 备注「简单优先」）
+  - start/stop 由 spawn 到 tokio，状态机线程只做阻塞 recv_timeout(50ms)，空闲 CPU 0
+- `hotkey/permission.rs`：input（试开 event*）/uinput（试写）/ydotoold（socket 存在）三项自检 + problems 指引
+- `hotkey/mod.rs` start()：自检 → 读配置（hold/lock 键名）→ 监听 → 状态机；无 input 权限只报错不崩溃
+- `commands::get_permission_status` + `hotkey://debug`/`hotkey://permission` 事件；DevView 热键调试面板（权限徽章 + 按住集合 + 最近触发）
+- 部署：已 `usermod -aG input,uinput guxing`（重登录后桌面会话生效）
+
+### uinput 注入全链路验证（无头，真键盘事件路径）
+- hold：Ctrl↓→Super↓（150ms 窗口）→ 会话 Recording → 3s → Super↑ → stop → 会话结束 ✓
+- lock：干扰 tap Ctrl×2 无误触 → Ctrl+Super+Shift 三连 → Lock 开始 → 再按一次 → 停止 ✓
+- 无权限：无 input 组时引擎不启动、有 problems 指引、应用不崩 ✓
+- 待实机验证：真键盘（非 uinput）下焦点应用不被干扰（evdev 只读不吞，理论无影响）、气泡随热键弹出

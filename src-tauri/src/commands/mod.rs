@@ -116,3 +116,9 @@ pub async fn start_session(
 pub async fn stop_session(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     state.session.stop(&app).await
 }
+
+/// 热键运行权限自检（input/uinput/ydotoold），设置页与通知消费
+#[tauri::command]
+pub fn get_permission_status() -> crate::hotkey::permission::PermissionStatus {
+    crate::hotkey::permission::check()
+}

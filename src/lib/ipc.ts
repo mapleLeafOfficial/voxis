@@ -46,6 +46,16 @@ export const startSession = (device?: string, lock = false) =>
   invoke<void>("start_session", { device: device ?? null, lock });
 export const stopSession = () => invoke<void>("stop_session");
 
+export interface PermissionStatus {
+  input_ok: boolean;
+  uinput_ok: boolean;
+  ydotoold_ok: boolean;
+  problems: string[];
+}
+
+export const getPermissionStatus = () =>
+  invoke<PermissionStatus>("get_permission_status");
+
 // ---- 事件名常量 ----
 export const EV = {
   volume: "session://volume",
@@ -55,4 +65,6 @@ export const EV = {
   sentence: "session://sentence",
   state: "session://state",
   committed: "session://committed",
+  hotkeyDebug: "hotkey://debug",
+  hotkeyPermission: "hotkey://permission",
 } as const;

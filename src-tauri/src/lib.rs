@@ -5,6 +5,7 @@ mod bubble;
 mod commands;
 mod config;
 pub mod events;
+pub mod hotkey;
 mod logging;
 pub mod session;
 mod state;
@@ -46,6 +47,7 @@ pub fn run() {
             commands::dev_capture_stop,
             commands::start_session,
             commands::stop_session,
+            commands::get_permission_status,
         ])
         .setup(|_app| {
             // dev 构建直接显示主窗口，方便调试；release 由托盘/命令唤起
@@ -53,6 +55,9 @@ pub fn run() {
             if let Some(win) = _app.get_webview_window("main") {
                 let _ = win.show();
             }
+
+            // 全局热键引擎：权限自检 → evdev 监听 → hold/lock 状态机
+            hotkey::start(_app.handle());
 
             // 冒烟钩子：--smoke-session 无头跑一轮会话（启动→6s→停止→退出）
             if std::env::args().any(|a| a == "--smoke-session") {
