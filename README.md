@@ -31,6 +31,10 @@ sudo usermod -aG input,uinput $USER && sudo groupadd -f uinput
 sudo pacman -U voxis_0.1.0_amd64.deb   # 注销重登后启动 voxis
 ```
 
+> ⚠️ 若需 `sudo` 借组临时启动（未重登录时），必须显式传 `WAYLAND_DISPLAY=$WAYLAND_DISPLAY`：
+> sudo 重置环境，缺失时应用挤到 XWayland，Wayland 剪贴板（wl-clipboard-rs）连不上合成器，复制/粘贴降级失效。
+```
+
 ### API Key
 
 DashScope（阿里云百炼）Key，优先级：设置页填写的 Key > `QWEN_API_KEY` 环境变量 > `~/.config/qwen-voice-input/config.ini`。
