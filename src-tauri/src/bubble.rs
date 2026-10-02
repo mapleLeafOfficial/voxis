@@ -71,13 +71,10 @@ fn try_init_layer_shell(win: &tauri::WebviewWindow, pos_cfg: &str) -> bool {
     true
 }
 
-/// 显示气泡（会话开始时调用）：先按配置定位，再 show
+/// 显示气泡（会话开始时调用）：先按配置定位，再 show。
+/// GTK 只能在主线程操作 —— 本函数可能从 tokio/热键线程调用，必须 run_on_main_thread 调度。
 pub fn show(app: &AppHandle) {
-    let Some(win) = app.get_webview_window("bubble") else {
-        return;
-    };
-
-    // 读取位置配置（读锁异常时退回默认）
+    // 位置配置在锁内读出（避免把锁跨线程移动）
     let pos_cfg = app
         .try_state::<crate::state::AppState>()
         .and_then(|s| {
@@ -88,46 +85,57 @@ pub fn show(app: &AppHandle) {
         })
         .unwrap_or_else(|| "bottom_center".into());
 
-    // Wayland：layer-shell 接管定位；X11/降级：传统物理坐标定位
-    #[cfg(target_os = "linux")]
-    let layered = try_init_layer_shell(&win, &pos_cfg);
-    #[cfg(not(target_os = "linux"))]
-    let layered = false;
+    let app2 = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        let app = &app2;
+        let Some(win) = app.get_webview_window("bubble") else {
+            return;
+        };
 
-    if !layered {
-        if let Ok(Some(monitor)) = win.current_monitor() {
-            let ms = monitor.size();
-            let mp = monitor.position();
-            let (bw, bh) = win
-                .outer_size()
-                .map(|s| (s.width as i32, s.height as i32))
-                .unwrap_or((FALLBACK_W, FALLBACK_H));
+        // Wayland：layer-shell 接管定位；X11/降级：传统物理坐标定位
+        #[cfg(target_os = "linux")]
+        let layered = try_init_layer_shell(&win, &pos_cfg);
+        #[cfg(not(target_os = "linux"))]
+        let layered = false;
 
-            let (x, y) = match pos_cfg.as_str() {
-                "top_left" => (mp.x + EDGE_MARGIN, mp.y + EDGE_MARGIN),
-                "top_right" => (mp.x + ms.width as i32 - bw - EDGE_MARGIN, mp.y + EDGE_MARGIN),
-                "bottom_left" => (mp.x + EDGE_MARGIN, mp.y + ms.height as i32 - bh - EDGE_MARGIN),
-                "bottom_right" => (
-                    mp.x + ms.width as i32 - bw - EDGE_MARGIN,
-                    mp.y + ms.height as i32 - bh - EDGE_MARGIN,
-                ),
-                _ => (
-                    mp.x + (ms.width as i32 - bw) / 2,
-                    mp.y + ms.height as i32 - bh - BOTTOM_OFFSET,
-                ),
-            };
-            let _ = win.set_position(PhysicalPosition::new(x, y));
+        if !layered {
+            if let Ok(Some(monitor)) = win.current_monitor() {
+                let ms = monitor.size();
+                let mp = monitor.position();
+                let (bw, bh) = win
+                    .outer_size()
+                    .map(|s| (s.width as i32, s.height as i32))
+                    .unwrap_or((FALLBACK_W, FALLBACK_H));
+
+                let (x, y) = match pos_cfg.as_str() {
+                    "top_left" => (mp.x + EDGE_MARGIN, mp.y + EDGE_MARGIN),
+                    "top_right" => (mp.x + ms.width as i32 - bw - EDGE_MARGIN, mp.y + EDGE_MARGIN),
+                    "bottom_left" => (mp.x + EDGE_MARGIN, mp.y + ms.height as i32 - bh - EDGE_MARGIN),
+                    "bottom_right" => (
+                        mp.x + ms.width as i32 - bw - EDGE_MARGIN,
+                        mp.y + ms.height as i32 - bh - EDGE_MARGIN,
+                    ),
+                    _ => (
+                        mp.x + (ms.width as i32 - bw) / 2,
+                        mp.y + ms.height as i32 - bh - BOTTOM_OFFSET,
+                    ),
+                };
+                let _ = win.set_position(PhysicalPosition::new(x, y));
+            }
         }
-    }
 
-    let _ = win.show();
+        let _ = win.show();
+    });
 }
 
-/// 隐藏气泡
+/// 隐藏气泡（GTK 调用切主线程，理由同 show）
 pub fn hide(app: &AppHandle) {
-    if let Some(win) = app.get_webview_window("bubble") {
-        let _ = win.hide();
-    }
+    let app2 = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(win) = app2.get_webview_window("bubble") {
+            let _ = win.hide();
+        }
+    });
 }
 
 /// 延迟隐藏：给前端留出结果徽标/错误摘要的展示与淡出动画时间

@@ -67,14 +67,19 @@ fn current_state(app: &AppHandle) -> SessionState {
         .unwrap_or(SessionState::Idle)
 }
 
-/// 会话状态变更 → 图标与菜单文案同步（session.rs emit_state 调用）
+/// 会话状态变更 → 图标与菜单文案同步（session.rs emit_state 调用，可能在 tokio 线程）。
+/// libayatana/GTK 调用必须切主线程。
 pub fn update_state(app: &AppHandle, state: SessionState) {
-    let Some(tray) = app.try_state::<Tray>() else { return };
     let icon_bytes = if state == SessionState::Idle { ICON_IDLE } else { ICON_RECORDING };
-    if let Ok(icon) = tauri::image::Image::from_bytes(icon_bytes) {
-        let _ = tray.icon.set_icon(Some(icon));
-    }
-    let _ = tray.toggle_item.set_text(if state == SessionState::Idle { "开始会话" } else { "停止会话" });
+    let text = if state == SessionState::Idle { "开始会话" } else { "停止会话" };
+    let app2 = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        let Some(tray) = app2.try_state::<Tray>() else { return };
+        if let Ok(icon) = tauri::image::Image::from_bytes(icon_bytes) {
+            let _ = tray.icon.set_icon(Some(icon));
+        }
+        let _ = tray.toggle_item.set_text(text);
+    });
 }
 
 /// 左键/菜单共用：切换会话（切换是 async 操作，spawn 到 tokio）

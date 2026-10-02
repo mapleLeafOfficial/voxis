@@ -126,10 +126,14 @@ impl SessionManager {
         // 1. API Key（无 → error 事件 + 弹出主窗口，保持 Idle）
         let Some(api_key) = resolve_api_key(&cfg.api_key) else {
             Self::emit_error(app, "key", "未配置 API Key".into());
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.show();
-                let _ = w.set_focus();
-            }
+            // GTK 只能主线程操作（start_inner 从 tokio 线程调用）
+            let app2 = app.clone();
+            let _ = app.run_on_main_thread(move || {
+                if let Some(w) = app2.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
+            });
             return Err("未配置 API Key".into());
         };
 
