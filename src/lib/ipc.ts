@@ -68,3 +68,9 @@ export const EV = {
   hotkeyDebug: "hotkey://debug",
   hotkeyPermission: "hotkey://permission",
 } as const;
+
+/** 提交结果三态（session://committed payload） */
+export interface CommittedPayload {
+  text: string;
+  result: "pasted" | "copied" | "none";
+}

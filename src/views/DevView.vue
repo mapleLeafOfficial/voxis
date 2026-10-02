@@ -155,9 +155,9 @@ onMounted(async () => {
       sessionSentences.value.push(e.payload);
       partialText.value = "";
     }),
-    await listen<{ text: string }>(EV.committed, (e) => {
+    await listen<{ text: string; result: string }>(EV.committed, (e) => {
       finalText.value = e.payload.text;
-      log("session://committed", e.payload.text || "（空文本：未说话或未识别）");
+      log("session://committed", `[${e.payload.result}] ${e.payload.text || "（空文本）"}`);
     }),
     // ---- todo6：热键调试事件 ----
     await listen<string>(EV.hotkeyDebug, (e) => {

@@ -3,6 +3,7 @@ pub mod asr;
 pub mod audio;
 mod bubble;
 mod commands;
+mod commit;
 mod config;
 pub mod events;
 pub mod hotkey;
@@ -36,6 +37,7 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(AppState::new_with_rwlock(config))
         .invoke_handler(tauri::generate_handler![
             commands::ping,

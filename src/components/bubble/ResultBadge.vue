@@ -3,7 +3,7 @@
 import { computed } from "vue";
 
 const props = defineProps<{
-  kind: "done" | "empty" | "error";
+  kind: "pasted" | "copied" | "empty" | "error";
   text?: string;
 }>();
 
@@ -11,7 +11,8 @@ const label = computed(() => {
   if (props.kind === "error") return props.text || "出错了";
   if (props.kind === "empty") return "未识别到语音";
   const n = (props.text || "").trim().length;
-  return `✓ 已识别 ${n} 字`;
+  if (props.kind === "copied") return `⧉ 已复制 ${n} 字`;
+  return `✓ 已上屏 ${n} 字`;
 });
 </script>
 
@@ -19,7 +20,8 @@ const label = computed(() => {
   <div
     class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm whitespace-nowrap overflow-hidden"
     :class="{
-      'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300': kind === 'done',
+      'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300': kind === 'pasted',
+      'bg-sky-500/15 text-sky-600 dark:text-sky-300': kind === 'copied',
       'bg-neutral-500/15 text-neutral-500': kind === 'empty',
       'bg-red-500/15 text-red-600 dark:text-red-300': kind === 'error',
     }"

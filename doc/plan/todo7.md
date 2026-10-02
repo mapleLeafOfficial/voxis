@@ -6,7 +6,7 @@
 - **优先级**：P0
 - **预估工作量**：~6 个文件
 - **依赖**：todo4
-- **状态**：⬜ 未开始
+- **状态**：✅ 已完成（代码+冒烟通过；M2 粘贴闭环需实机验证）
 
 ---
 
@@ -61,3 +61,29 @@
 
 - 部署依赖：`ydotool` 安装 + `ydotoold` 服务 + `uinput` 组；setup 脚本在 todo10 统一落地，本 todo 手动验证
 - ydotool 键码：29=左Ctrl，125=左Super，47=V
+
+---
+
+## 完成记录（2026-10-02）
+
+### 交付内容
+- `commit/clipboard.rs`：多级回退 wl-clipboard-rs（Wayland 原生，后台服务持有）→ arboard → xclip/xsel
+- `commit/inject.rs`：ydotool Ctrl+V（socket 探测 YDOTOOL_SOCKET → /run/user/<uid>/.ydotool_socket → /run/ydotoold/socket）→ X11 xdotool 回退；注入前 150ms 静默
+- `commit/mod.rs`：commit() 编排 + 三态结果（pasted/copied/none）+ committed 事件带 result + 统一 notify()（tauri-plugin-notification）
+- `session.rs`：stop() 的 Committing 阶段改走 spawn_blocking(commit)（不卡 tokio driver）
+- 前端：CommittedPayload 带三态；气泡徽标「✓ 已上屏 N 字 / ⧉ 已复制 N 字 / 未识别到语音」；DevView 显示 [result]
+- capabilities 加 notification:default；windows 含 bubble
+- **注入键序改用纯 Ctrl+V**（计划原写 Ctrl+Super+V；Wayland 下合成器不拦 Ctrl+V，Super 反而会让应用收到未绑定组合键）
+
+### 部署现状（本机）
+- ydotool 已装；ydotoold 以 root 跑：`sudo ydotoold -p /run/user/1000/.ydotool_socket -P 0660 -o 1000:1000`（socket 属主转给 guxing）
+- **重登录后可改用 systemd --user 服务**（`systemctl --user enable --now ydotool`），当前 user manager 还是旧组（无 uinput）跑不了；todo10 setup 脚本固化
+- ydotool 客户端注入验证 ✓（Shift+A 通信测试）
+- 冒烟：commit 编排 copied 分支 ✓（clipboard_only 模式跑 smoke-session，「提交结果: copied」）
+
+### 待实机验证（M2 核心闭环）
+- [ ] 焦点在 gedit/浏览器：热键说话松开 → 文字出现在光标处
+- [ ] 焦点在桌面 → 「已复制」通知 + Ctrl+V 可粘贴
+- [ ] 停 ydotoold + 无 X11 → 回退 copied 不崩（代码路径已验证）
+- [ ] 连续两次输入不粘旧内容（copy 在 inject 前，每次覆盖）
+- ⚠️ pi shell 环境里 wl-paste 拿不到数据（compositor 不回 offer，疑似该 shell 会话特有）；桌面终端内大概率正常，若同样失败会走 copied 回退，不会卡死

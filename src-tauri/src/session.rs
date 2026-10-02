@@ -5,7 +5,7 @@ use crate::asr::key::resolve_api_key;
 use crate::audio::capture::CaptureCallbacks;
 use crate::audio::manager::CaptureManager;
 use crate::config::Config;
-use crate::events::{self, CommittedPayload, ErrorPayload};
+use crate::events::{self, ErrorPayload};
 use crate::state::AppState;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -328,7 +328,15 @@ impl SessionManager {
         if text.trim().is_empty() {
             tracing::info!("会话结束：无文本（未说话或未识别）");
         }
-        let _ = app.emit(events::COMMITTED, CommittedPayload { text });
+        // 上屏编排（阻塞：剪贴板 + 150ms 静默 + 注入），committed 事件由 commit 内发出
+        let app2 = app.clone();
+        let committed_text = text.clone();
+        let result = tauri::async_runtime::spawn_blocking(move || {
+            crate::commit::commit(&app2, &committed_text)
+        })
+        .await
+        .unwrap_or(crate::commit::RESULT_COPIED);
+        tracing::info!("提交结果: {result}");
         // 气泡：留 1.8s 给前端结果徽标展示与淡出，再隐藏窗口
         crate::bubble::hide_delayed(app.clone(), 1800);
 

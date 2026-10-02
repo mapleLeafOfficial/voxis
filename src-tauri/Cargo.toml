@@ -28,6 +28,9 @@ tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
 futures-util = "0.3"
 uuid = { version = "1", features = ["v4"] }
 evdev = "0.13.2"
+wl-clipboard-rs = "0.9.4"
+arboard = "3.6.1"
+tauri-plugin-notification = "2.5.1"
 
 # Read more about optimization guidelines: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]

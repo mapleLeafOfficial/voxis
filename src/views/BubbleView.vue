@@ -16,6 +16,7 @@ const sentences = ref<string[]>([]);
 const volume = ref(0);
 const error = ref<{ source: string; message: string } | null>(null);
 const resultText = ref<string | null>(null); // committed 全文（null=无结果）
+const resultKind = ref<"pasted" | "copied" | "none">("none");
 const fading = ref(false); // 结果/错误徽标淡出
 
 let unlisteners: UnlistenFn[] = [];
@@ -34,10 +35,11 @@ const fullText = computed(() =>
   [...sentences.value, partial.value].filter(Boolean).join(" "),
 );
 
-// 徽标：error > committed 结果
-const badge = computed<"none" | "done" | "empty" | "error">(() => {
+// 徽标：error > committed 结果（三态）
+const badge = computed<"none" | "pasted" | "copied" | "empty" | "error">(() => {
   if (error.value) return "error";
-  if (resultText.value !== null) return resultText.value.trim() ? "done" : "empty";
+  if (resultText.value !== null)
+    return resultKind.value === "none" ? "empty" : resultKind.value;
   return "none";
 });
 
@@ -99,8 +101,9 @@ onMounted(async () => {
       lastVolumeAt = now;
       volume.value = e.payload;
     }),
-    await listen<{ text: string }>(EV.committed, (e) => {
+    await listen<{ text: string; result: "pasted" | "copied" | "none" }>(EV.committed, (e) => {
       resultText.value = e.payload.text;
+      resultKind.value = e.payload.result;
     }),
     await listen<{ source: string; message: string }>(EV.error, (e) => {
       error.value = e.payload;

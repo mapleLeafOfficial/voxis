@@ -19,4 +19,6 @@ pub struct ErrorPayload {
 #[derive(Debug, Clone, Serialize)]
 pub struct CommittedPayload {
     pub text: String,
+    /// 提交结果三态：pasted（已上屏）/ copied（仅复制）/ none（空文本）
+    pub result: String,
 }
