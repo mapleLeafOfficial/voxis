@@ -12,20 +12,82 @@ fn desktop_path() -> Option<PathBuf> {
     Some(config_home.join("autostart").join("voxis.desktop"))
 }
 
-/// Windows：注册表 Run 键（todo4 实现）
+/// Windows：HKCU\...\Run 注册表自启
 #[cfg(target_os = "windows")]
-pub fn is_enabled() -> bool {
-    tracing::debug!("[autostart] windows 桩：todo4 实现注册表查询");
-    false
+mod platform {
+    use windows::core::w;
+    use windows::Win32::Foundation::{ERROR_NO_MORE_ITEMS, ERROR_SUCCESS, HANDLE};
+    use windows::Win32::System::Registry::{
+        RegCloseKey, RegDeleteValueW, RegOpenKeyExW, RegQueryValueExW, RegSetValueExW, HKEY,
+        HKEY_CURRENT_USER, KEY_QUERY_VALUE, KEY_SET_VALUE, REG_SAM_FLAGS, REG_SZ,
+        REG_VALUE_TYPE,
+    };
+
+    const RUN_KEY: windows::core::PCWSTR =
+        w!("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
+    const VALUE: windows::core::PCWSTR = w!("voxis");
+
+    fn open(access: REG_SAM_FLAGS) -> Result<HKEY, String> {
+        let mut hk = HKEY::default();
+        let r = unsafe { RegOpenKeyExW(HKEY_CURRENT_USER, RUN_KEY, Some(0), access, &mut hk) };
+        if r != ERROR_SUCCESS {
+            return Err(format!("打开注册表 Run 键失败: {r:?}"));
+        }
+        Ok(hk)
+    }
+
+    pub fn is_enabled() -> bool {
+        let Ok(hk) = open(KEY_QUERY_VALUE) else { return false };
+        let mut ty = REG_VALUE_TYPE::default();
+        let mut len = 0u32;
+        let r = unsafe { RegQueryValueExW(hk, VALUE, None, Some(&mut ty), None, Some(&mut len)) };
+        unsafe { let _ = RegCloseKey(hk); }
+        r == ERROR_SUCCESS
+    }
+
+    pub fn set_enabled(enable: bool) -> Result<(), String> {
+        if !enable {
+            let hk = open(KEY_SET_VALUE)?;
+            let r = unsafe { RegDeleteValueW(hk, VALUE) };
+            unsafe { let _ = RegCloseKey(hk); }
+            if r == ERROR_SUCCESS || r == ERROR_NO_MORE_ITEMS {
+                tracing::info!("[autostart] 已禁用开机自启（注册表）");
+                return Ok(());
+            }
+            return Err(format!("删除自启值失败: {r:?}"));
+        }
+        let exe = std::env::current_exe()
+            .map(|p| format!("{} --minimized", p.display()))
+            .unwrap_or_else(|_| "voxis --minimized".into());
+        let wide: Vec<u16> = exe.encode_utf16().chain(std::iter::once(0)).collect();
+        let hk = open(KEY_SET_VALUE)?;
+        let r = unsafe {
+            RegSetValueExW(
+                hk,
+                VALUE,
+                Some(0),
+                REG_SZ,
+                Some(std::slice::from_raw_parts(
+                    wide.as_ptr().cast(),
+                    wide.len() * 2,
+                )),
+            )
+        };
+        unsafe { let _ = RegCloseKey(hk); }
+        if r == ERROR_SUCCESS {
+            tracing::info!("[autostart] 已启用开机自启（注册表）：{exe}");
+            Ok(())
+        } else {
+            Err(format!("写入自启值失败: {r:?}"))
+        }
+    }
+
+    // HANDLE 类型占位避免 unused import 警告（windows crate 重导出链）
+    const _: HANDLE = HANDLE(std::ptr::null_mut());
 }
 
-/// Windows：注册表 Run 键写入（todo4 实现）
 #[cfg(target_os = "windows")]
-pub fn set_enabled(enable: bool) -> Result<(), String> {
-    let _ = enable;
-    tracing::debug!("[autostart] windows 桩：todo4 实现注册表写入");
-    Err("windows 自启未实现（todo4 注册表 Run 键）".into())
-}
+pub use platform::{is_enabled, set_enabled};
 
 /// 当前是否已启用自启（Linux）
 #[cfg(target_os = "linux")]

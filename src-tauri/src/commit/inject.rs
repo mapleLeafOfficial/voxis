@@ -10,11 +10,38 @@ use std::time::Duration;
 /// 注入前静默等待：给合成器/应用同步剪贴板的窗口
 const PASTE_QUIET: Duration = Duration::from_millis(150);
 
-/// Windows：SendInput Ctrl+V（todo3 实现真身，当前桩）
+/// Windows：SendInput 模拟 Ctrl+V（VK 路径，无注入目标权限限制）
 #[cfg(target_os = "windows")]
 pub fn inject_paste() -> Result<(), String> {
+    use windows::Win32::UI::Input::KeyboardAndMouse::*;
+
     std::thread::sleep(PASTE_QUIET);
-    Err("windows 注入通道未实现（todo3 SendInput）".into())
+
+    let key = |vk: VIRTUAL_KEY, up: bool| INPUT {
+        r#type: INPUT_KEYBOARD,
+        Anonymous: INPUT_0 {
+            ki: KEYBDINPUT {
+                wVk: vk,
+                wScan: 0,
+                dwFlags: if up { KEYEVENTF_KEYUP } else { KEYBD_EVENT_FLAGS::default() },
+                time: 0,
+                dwExtraInfo: 0,
+            },
+        },
+    };
+    let inputs = [
+        key(VK_CONTROL, false),
+        key(VK_V, false),
+        key(VK_V, true),
+        key(VK_CONTROL, true),
+    ];
+    // 短间隔逐键发（同帧四键部分老程序可能只响应首尾）
+    let sent = unsafe { SendInput(&inputs, std::mem::size_of::<INPUT>() as i32) };
+    if sent as usize != inputs.len() {
+        return Err(format!("SendInput 只发送 {sent}/{} 键", inputs.len()));
+    }
+    tracing::debug!("[commit] 注入：SendInput Ctrl+V");
+    Ok(())
 }
 
 /// 尝试注入粘贴（Linux）。Ok(()) = 已注入；Err(原因) = 不可用/失败（调用方回退 copied）。
