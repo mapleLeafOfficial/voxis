@@ -199,6 +199,7 @@ impl SessionManager {
                 *st = SessionState::Recording;
             }
             Self::emit_state(app, SessionState::Recording);
+            crate::bubble::show(app);
             return Ok(());
         }
 
@@ -266,6 +267,7 @@ impl SessionManager {
             *st = SessionState::Recording;
         }
         Self::emit_state(app, SessionState::Recording);
+        crate::bubble::show(app);
         Ok(())
     }
 
@@ -327,6 +329,8 @@ impl SessionManager {
             tracing::info!("会话结束：无文本（未说话或未识别）");
         }
         let _ = app.emit(events::COMMITTED, CommittedPayload { text });
+        // 气泡：留 1.8s 给前端结果徽标展示与淡出，再隐藏窗口
+        crate::bubble::hide_delayed(app.clone(), 1800);
 
         *self.state.lock().expect("state 锁") = SessionState::Idle;
         Self::emit_state(app, SessionState::Idle);

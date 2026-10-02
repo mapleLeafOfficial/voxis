@@ -6,7 +6,7 @@
 - **优先级**：P0
 - **预估工作量**：~8 个文件
 - **依赖**：todo4
-- **状态**：⬜ 未开始
+- **状态**：✅ 已完成（代码+构建/冒烟通过；视觉效果需实机验证，见下）
 
 ---
 
@@ -67,3 +67,20 @@
 ## 备注
 
 Wayland 下窗口定位：Tauri `set_position` 用逻辑像素，多显示器先只保证主屏。
+
+---
+
+## 完成记录（2026-10-02）
+
+### 交付内容
+- `tauri.conf.json`：bubble 窗口（520×88，透明/无装饰/置顶/不进任务栏/不抢焦点/默认隐藏，url `index.html#/bubble`）
+- `bubble.rs`：show/hide/hide_delayed；**Wayland 用 gtk-layer-shell（Overlay 层）锚定定位**（bottom_center 锚底水平居中 / 四角锚两边 + margin），X11 降级 set_position；位置读 `ui.bubble_pos`，系统已装 `gtk-layer-shell` 包
+- `session.rs` 联动：start 成功 → show；Committed → 1.8s 后自动 hide
+- 前端：`BubbleView.vue` + `StatusDot`（呼吸红点/琥珀/红叉）+ `VolumeBars`（5 根音量条，事件节流 50ms）+ `ResultBadge`（已识别 N 字/未识别/错误摘要，淡出过渡）；主题 light/dark/system（matchMedia 跟随）；点击气泡 = stop_session
+- 路由 `/bubble`；DevView 保留（会话面板与气泡并行展示）
+
+### 待实机验证（需要用户操作）
+- [ ] 气泡出现在底部居中且**不置顶失效**（GNOME Wayland + layer-shell Overlay）
+- [ ] gedit 连续打字时气泡出现/更新**焦点不被打断**（focusable:false）
+- [ ] 点击气泡能结束会话（focusable:false 下 WebKit 点击命中验证；若无效改 accepts_first_mouse 兼方案）
+- [ ] 结果徽标淡出节奏与整体视觉微调

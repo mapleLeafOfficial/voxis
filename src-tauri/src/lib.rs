@@ -1,6 +1,7 @@
 // Voxis — Linux 全局语音输入（复刻微信 PC 端体验）
 pub mod asr;
 pub mod audio;
+mod bubble;
 mod commands;
 mod config;
 pub mod events;

@@ -11,7 +11,7 @@
 | 2 | 录音引擎（cpal/PipeWire） | M2 | P0 | todo1 | ✅ |
 | 3 | 流式 ASR 客户端（DashScope WS） | M3 | P0 | todo1 | ✅ |
 | 4 | 会话状态机 + IPC 整合 | M2+M3 串联 | P0 | todo2, todo3 | ✅ |
-| 5 | 气泡浮窗（实时预览 UI） | M4 | P0 | todo4 | ⬜ |
+| 5 | 气泡浮窗（实时预览 UI） | M4 | P0 | todo4 | ✅ |
 | 6 | 全局热键引擎（evdev hold/lock） | M1 | P0 | todo4 | ⬜ |
 | 7 | 上屏引擎（剪贴板+注入粘贴） | M5 | P0 | todo4 | ⬜ |
 | 8 | 设置窗口 | M6 | P1 | todo6, todo7 | ⬜ |

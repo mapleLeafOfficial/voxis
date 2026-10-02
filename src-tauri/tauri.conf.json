@@ -17,6 +17,23 @@
         "width": 900,
         "height": 650,
         "visible": false
+      },
+      {
+        "label": "bubble",
+        "title": "Voxis Bubble",
+        "url": "index.html#/bubble",
+        "width": 520,
+        "height": 88,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focusable": false,
+        "visible": false,
+        "resizable": false,
+        "maximizable": false,
+        "minimizable": false
       }
     ],
     "security": {

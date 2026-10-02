@@ -7,6 +7,12 @@ const router = createRouter({
   routes: [
     { path: "/", name: "dev", component: DevView },
     {
+      path: "/bubble",
+      name: "bubble",
+      // 气泡浮窗（由 bubble 窗口加载 index.html#/bubble）
+      component: () => import("./views/BubbleView.vue"),
+    },
+    {
       path: "/settings",
       name: "settings",
       // todo8 实现完整设置页，此处占位
