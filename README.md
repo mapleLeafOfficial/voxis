@@ -72,6 +72,7 @@ DashScope（阿里云百炼）Key，优先级：设置页填写的 Key > `QWEN_A
 | 上屏变「已复制」 | ydotoold 未运行：`sudo systemctl status ydotoold-voxis`；或 X11 无 DISPLAY 且无 ydotoold |
 | 托盘图标不显示 | GNOME 需 `gnome-shell-extension-appindicator`；装后注销重登 |
 | 粘贴进 XWayland 应用无内容 | 某些 XWayland 客户端对 data-control 支持差，先复制后手动 Ctrl+V |
+| 日志 WARN「wl-clipboard-rs 失败 … not supported」 | **GNOME（mutter）不支持 wlr-data-control 协议**，属已知限制：自动回退 arboard（经 XWayland 剪贴板桥，mutter 双向同步），功能不受影响，可无视 |
 | 录音静音 | `input.device` 语义是 ALSA PCM 名：默认 `pipewire` 跟随系统默认源；不要填 `default` |
 | 气泡位置不对 | Wayland 下用 gtk-layer-shell 定位（需 libgtk-layer-shell）；不支持的合成器降级 X11 set_position |
 | 完全无法启动 | 日志文件看 panic；删除 `~/.config/voxis/config.json` 恢复默认配置 |
